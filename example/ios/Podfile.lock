@@ -1,0 +1,57 @@
+PODS:
+  - Flutter (1.0.0)
+  - fluttertoast (0.0.2):
+    - Flutter
+    - Toast
+  - permission_handler_apple (9.0.4):
+    - Flutter
+  - screen_capture_event (0.0.1):
+    - Flutter
+  - screen_protector (1.1.0):
+    - Flutter
+    - ScreenProtectorKit (~> 1.2.0)
+  - ScreenProtectorKit (1.2.0)
+  - secure_content (0.0.1):
+    - Flutter
+  - Toast (4.0.0)
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - fluttertoast (from `.symlinks/plugins/fluttertoast/ios`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - screen_capture_event (from `.symlinks/plugins/screen_capture_event/ios`)
+  - screen_protector (from `.symlinks/plugins/screen_protector/ios`)
+  - secure_content (from `.symlinks/plugins/secure_content/ios`)
+
+SPEC REPOS:
+  trunk:
+    - ScreenProtectorKit
+    - Toast
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  fluttertoast:
+    :path: ".symlinks/plugins/fluttertoast/ios"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
+  screen_capture_event:
+    :path: ".symlinks/plugins/screen_capture_event/ios"
+  screen_protector:
+    :path: ".symlinks/plugins/screen_protector/ios"
+  secure_content:
+    :path: ".symlinks/plugins/secure_content/ios"
+
+SPEC CHECKSUMS:
+  Flutter: f04841e97a9d0b0a8025694d0796dd46242b2854
+  fluttertoast: 16fbe6039d06a763f3533670197d01fc73459037
+  permission_handler_apple: 44366e37eaf29454a1e7b1b7d736c2cceaeb17ce
+  screen_capture_event: bcf965bb31968a51c08ad3698725c5ad8c597124
+  screen_protector: 8058373f715cb50c3090fc4941ccbfe414472b9c
+  ScreenProtectorKit: 823e5b0342eea5acd7e9b8d92956a5a7f9c2ce40
+  secure_content: c2b5b8725fcbdfefd0a018c162641186bbe75fc5
+  Toast: 91b396c56ee72a5790816f40d3a94dd357abc196
+
+PODFILE CHECKSUM: 4e8f8b2be68aeea4c0d5beb6ff1e79fface1d048
+
+COCOAPODS: 1.11.3
