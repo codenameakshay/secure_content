@@ -34,9 +34,8 @@ and the Flutter guide for
   </a>
 </p><br>
 
-| <https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4>  |
-|---|
-|  **Example in another app** |
+
+https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4
 
 ## Features
 
