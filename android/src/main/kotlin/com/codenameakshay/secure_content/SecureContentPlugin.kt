@@ -1,4 +1,4 @@
-package com.qoohoo.secure_content
+package com.codenameakshay.secure_content
 
 import androidx.annotation.NonNull
 

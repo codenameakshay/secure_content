@@ -36,7 +36,7 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.qoohoo.secure_content
+        package: com.codenameakshay.secure_content
         pluginClass: SecureContentPlugin
       ios:
         pluginClass: SecureContentPlugin

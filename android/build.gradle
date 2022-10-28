@@ -1,4 +1,4 @@
-group 'com.qoohoo.secure_content'
+group 'com.codenameakshay.secure_content'
 version '1.0-SNAPSHOT'
 
 buildscript {

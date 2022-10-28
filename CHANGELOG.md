@@ -1,3 +1,4 @@
-## 0.0.1
+## 0.0.11
 
-* TODO: Describe initial release.
+* Initial release
+* Supports Android & iOS
