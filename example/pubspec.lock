@@ -142,48 +142,6 @@ packages:
       url: "https://pub.dartlang.org"
     source: hosted
     version: "1.8.2"
-  permission_handler:
-    dependency: transitive
-    description:
-      name: permission_handler
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "10.0.0"
-  permission_handler_android:
-    dependency: transitive
-    description:
-      name: permission_handler_android
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "10.0.0"
-  permission_handler_apple:
-    dependency: transitive
-    description:
-      name: permission_handler_apple
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "9.0.4"
-  permission_handler_platform_interface:
-    dependency: transitive
-    description:
-      name: permission_handler_platform_interface
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "3.7.0"
-  permission_handler_windows:
-    dependency: transitive
-    description:
-      name: permission_handler_windows
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "0.1.0"
-  plugin_platform_interface:
-    dependency: transitive
-    description:
-      name: plugin_platform_interface
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "2.1.2"
   provider:
     dependency: "direct main"
     description:
@@ -194,21 +152,17 @@ packages:
   screen_capture_event:
     dependency: transitive
     description:
-      path: "."
-      ref: flutter-3-0
-      resolved-ref: "63a0108ac6eace5a1295afb2e3de738ceccfedf3"
-      url: "git@github.com:otopba/screen_capture_event.git"
-    source: git
+      name: screen_capture_event
+      url: "https://pub.dartlang.org"
+    source: hosted
     version: "1.1.0"
   screen_protector:
     dependency: transitive
     description:
-      path: "."
-      ref: dev-Flutter-3
-      resolved-ref: "492f0c2f4be529b2c934a5c434c5ee46ab3a8fab"
-      url: "git@github.com:qoohoo-app/screen_protector.git"
-    source: git
-    version: "1.1.1"
+      name: screen_protector
+      url: "https://pub.dartlang.org"
+    source: hosted
+    version: "1.1.4"
   secure_content:
     dependency: "direct main"
     description:

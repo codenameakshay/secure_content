@@ -1,8 +1,8 @@
 name: secure_content
-description: A new Flutter package project.
+description: Protect your app from screenshots, screen recording & on recent apps screen. Works for both Android & iOS, and is in development.
 version: 0.0.11
-
-publish_to: none
+homepage: https://hashstudios.dev
+repository: https://github.com/codenameakshay/secure_content
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
@@ -14,14 +14,8 @@ dependencies:
     sdk: flutter
   flutter_portal: ^1.1.1
   provider: ^6.0.2
-  screen_capture_event:
-    git:
-      url: git@github.com:otopba/screen_capture_event.git
-      ref: 'flutter-3-0'
-  screen_protector:
-    git:
-      url: git@github.com:qoohoo-app/screen_protector.git
-      ref: 'dev-Flutter-3'
+  screen_capture_event: ^1.1.0
+  screen_protector: ^1.1.4
 
 dev_dependencies:
   flutter_test:
