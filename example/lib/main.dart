@@ -182,24 +182,35 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               builder: (context, onInit, onDispose) => Text(
                 '$_counter',
-                style: Theme.of(context).textTheme.headline4,
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
               overlayWidgetBuilder: (context) => BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: const SizedBox(),
               ),
               appSwitcherMenuColor: Colors.pink,
-              protectInAppSwitcherMenu: false,
+              protectInAppSwitcherMenu: true,
             ),
             TextButton(
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => EmptyHome(title: widget.title),
+                  builder: (context) => const EmptyHome(secure: true),
                 ),
               ),
               child: const Text(
-                "Go to any unsecure page",
+                "Go to any other page",
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EmptyHome(secure: false),
+                ),
+              ),
+              child: const Text(
+                "Go to any other page (replace)",
               ),
             )
           ],
@@ -215,15 +226,15 @@ class _MyHomePageState extends State<MyHomePage> {
 }
 
 class EmptyHome extends StatelessWidget {
-  const EmptyHome({Key? key, required this.title}) : super(key: key);
+  const EmptyHome({Key? key, required this.secure}) : super(key: key);
 
-  final String title;
+  final bool secure;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Unsecure Page'),
+        title: Text(secure ? 'Secure Page' : 'Unsecure Page'),
       ),
       body: Center(
         child: Column(
@@ -231,8 +242,10 @@ class EmptyHome extends StatelessWidget {
           children: <Widget>[
             SizedBox(
               width: MediaQuery.of(context).size.width * 0.7,
-              child: const Text(
-                'You can take screenshot on this page, as the state has been deactivated. It would activate once again when you move back to the last page.',
+              child: Text(
+                secure
+                    ? 'This page is also secured, as the widget still exists in the widget tree. But instead of pushing if you had replaced the previous page, it would have become unsecured.'
+                    : 'You can take screenshot on this page, as the widget has been removed from the tree.',
                 textAlign: TextAlign.center,
               ),
             ),

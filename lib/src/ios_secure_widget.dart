@@ -57,11 +57,15 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
     if (widget.isSecure) {
       initialiseSecuring();
     }
+    ScreenProtector.isRecording().then(
+      (value) => setState(() {
+        isBlurred = value;
+      }),
+    );
     super.initState();
   }
 
   void initialiseSecuring() {
-    // For iOS only.
     if (widget.protectInAppSwitcherMenu) {
       _protectDataLeakageWithColor(widget.appSwitcherMenuColor);
     }
@@ -73,19 +77,17 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
   @override
   void onResumed() {
     if (widget.isSecure) {
-      // For Android only.
-      _protectDataLeakageOff();
+      _protectDataLeakageWithBlurOff();
     }
     super.onResumed();
   }
 
   @override
-  void onPaused() {
+  void onInactive() {
     if (widget.isSecure) {
-      // For Android only.
-      _protectDataLeakageOn();
+      _protectDataLeakageWithBlur();
     }
-    super.onPaused();
+    super.onInactive();
   }
 
   @override
@@ -107,38 +109,36 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
   }
 
   void disposeSecuring() {
-    // For iOS only.
+    if (widget.protectInAppSwitcherMenu) {
+      print('protectInAppSwitcherMenu : dispose');
+      _protectDataLeakageWithColorOff();
+    }
     _removeListenerPreventScreenshot();
     _preventScreenshotOff();
   }
 
   void _protectDataLeakageWithColor(Color color) async => await ScreenProtector.protectDataLeakageWithColor(color);
+  void _protectDataLeakageWithColorOff() async => await ScreenProtector.protectDataLeakageWithColorOff();
 
-  void _protectDataLeakageOff() async => await ScreenProtector.protectDataLeakageOff();
-
-  void _protectDataLeakageOn() async => await ScreenProtector.protectDataLeakageOn();
+  void _protectDataLeakageWithBlur() async => await ScreenProtector.protectDataLeakageWithBlur();
+  void _protectDataLeakageWithBlurOff() async => await ScreenProtector.protectDataLeakageWithBlurOff();
 
   void _preventScreenshotOn() async => await ScreenProtector.preventScreenshotOn();
-
   void _preventScreenshotOff() async => await ScreenProtector.preventScreenshotOff();
 
   void _addListenerPreventScreenshot() async {
     ScreenProtector.addListener(() {
       // Screenshot
-      // print('Screenshot:');
       widget.onScreenshotCaptured?.call();
     }, (isCaptured) {
       // Screen Record
-      // print('Screen Record:');
       setState(() {
-        isBlurred = !isCaptured;
+        isBlurred = isCaptured;
       });
       if (isBlurred) {
-        // print('Screen recording stopped');
-        widget.onScreenRecordingStop?.call();
-      } else {
-        // print('Screen recording started');
         widget.onScreenRecordingStart?.call();
+      } else {
+        widget.onScreenRecordingStop?.call();
       }
       // print("isBlurred : $isBlurred");
     });
@@ -151,24 +151,21 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
   @override
   Widget build(BuildContext context) {
     return PortalTarget(
-      portalFollower: widget.overlayWidgetBuilder != null
-          ? widget.overlayWidgetBuilder!(context)
-          : widget.builder(context, initialiseSecuring, disposeSecuring),
+      portalFollower: widget.overlayWidgetBuilder != null ? widget.overlayWidgetBuilder!(context) : null,
       visible: widget.debug ? true : widget.isSecure && isBlurred,
-      child: widget.builder(context, initialiseSecuring, disposeSecuring),
+      child: Container(
+        decoration: widget.debug
+            ? BoxDecoration(
+                color: Colors.amber,
+                border: Border.all(
+                  color: Colors.red,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(10),
+              )
+            : null,
+        child: widget.builder(context, initialiseSecuring, disposeSecuring),
+      ),
     );
   }
-
-  // @override
-  // void onEnterScreen() {
-  // until the widget remains in tree, don't let screenshot
-  // if (widget.isSecure) {
-  //   initialiseSecuring();
-  // }
-  // }
-
-  // @override
-  // void onLeaveScreen() {
-  // disposeSecuring();
-  // }
 }

@@ -7,7 +7,7 @@ import 'package:screen_protector/lifecycle/lifecycle_state.dart';
 
 abstract class RouteAwareState<T extends StatefulWidget> extends LifecycleState<T>
     with RouteAware, AfterLayoutMixin<T> {
-  late RouteObserver<PageRoute>? routeObserver;
+  RouteObserver<PageRoute>? routeObserver;
   bool enteredScreen = false;
   // use `afterFirstLayout()`, because we should wait for
   // the `initState() completed before getting objects from `context`
