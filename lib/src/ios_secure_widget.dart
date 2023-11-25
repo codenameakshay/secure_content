@@ -57,15 +57,21 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
     if (widget.isSecure) {
       initialiseSecuring();
     }
-    ScreenProtector.isRecording().then(
-      (value) => setState(() {
-        isBlurred = value;
-      }),
-    );
     super.initState();
   }
 
+  void initialiseIsBlurred() async {
+    final isRecording = await ScreenProtector.isRecording();
+    setState(() {
+      isBlurred = isRecording;
+    });
+    if (isBlurred && widget.onScreenRecordingStart != null) {
+      widget.onScreenRecordingStart?.call();
+    }
+  }
+
   void initialiseSecuring() {
+    initialiseIsBlurred();
     if (widget.protectInAppSwitcherMenu) {
       _protectDataLeakageWithColor(widget.appSwitcherMenuColor);
     }
@@ -110,7 +116,6 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
 
   void disposeSecuring() {
     if (widget.protectInAppSwitcherMenu) {
-      print('protectInAppSwitcherMenu : dispose');
       _protectDataLeakageWithColorOff();
     }
     _removeListenerPreventScreenshot();
