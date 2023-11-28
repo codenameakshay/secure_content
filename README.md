@@ -49,7 +49,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  secure_content: ^0.0.11
+  secure_content: ^0.1.0
 ```
 
 ### 2. Install it
