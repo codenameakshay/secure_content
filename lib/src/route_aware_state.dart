@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screen_protector/lifecycle/lifecycle_state.dart';
 
-abstract class RouteAwareState<T extends StatefulWidget> extends LifecycleState<T>
-    with RouteAware, AfterLayoutMixin<T> {
+abstract class RouteAwareState<T extends StatefulWidget>
+    extends LifecycleState<T> with RouteAware, AfterLayoutMixin<T> {
   RouteObserver<PageRoute>? routeObserver;
   bool enteredScreen = false;
   // use `afterFirstLayout()`, because we should wait for

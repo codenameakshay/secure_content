@@ -18,7 +18,9 @@ class IOSSecureWidget extends StatefulWidget {
   }) : super(key: key);
 
   /// The builder for child widget to be secured.
-  final Widget Function(BuildContext context, VoidCallback onInit, VoidCallback onDispose) builder;
+  final Widget Function(
+          BuildContext context, VoidCallback onInit, VoidCallback onDispose)
+      builder;
 
   /// Whether the child widget should be secured (dynamic change for the same widget).
   final bool isSecure;
@@ -122,14 +124,20 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
     _preventScreenshotOff();
   }
 
-  void _protectDataLeakageWithColor(Color color) async => await ScreenProtector.protectDataLeakageWithColor(color);
-  void _protectDataLeakageWithColorOff() async => await ScreenProtector.protectDataLeakageWithColorOff();
+  void _protectDataLeakageWithColor(Color color) async =>
+      await ScreenProtector.protectDataLeakageWithColor(color);
+  void _protectDataLeakageWithColorOff() async =>
+      await ScreenProtector.protectDataLeakageWithColorOff();
 
-  void _protectDataLeakageWithBlur() async => await ScreenProtector.protectDataLeakageWithBlur();
-  void _protectDataLeakageWithBlurOff() async => await ScreenProtector.protectDataLeakageWithBlurOff();
+  void _protectDataLeakageWithBlur() async =>
+      await ScreenProtector.protectDataLeakageWithBlur();
+  void _protectDataLeakageWithBlurOff() async =>
+      await ScreenProtector.protectDataLeakageWithBlurOff();
 
-  void _preventScreenshotOn() async => await ScreenProtector.preventScreenshotOn();
-  void _preventScreenshotOff() async => await ScreenProtector.preventScreenshotOff();
+  void _preventScreenshotOn() async =>
+      await ScreenProtector.preventScreenshotOn();
+  void _preventScreenshotOff() async =>
+      await ScreenProtector.preventScreenshotOff();
 
   void _addListenerPreventScreenshot() async {
     ScreenProtector.addListener(() {
@@ -156,7 +164,9 @@ class _IOSSecureWidgetState extends LifecycleState<IOSSecureWidget> {
   @override
   Widget build(BuildContext context) {
     return PortalTarget(
-      portalFollower: widget.overlayWidgetBuilder != null ? widget.overlayWidgetBuilder!(context) : null,
+      portalFollower: widget.overlayWidgetBuilder != null
+          ? widget.overlayWidgetBuilder!(context)
+          : null,
       visible: widget.debug ? true : widget.isSecure && isBlurred,
       child: Container(
         decoration: widget.debug

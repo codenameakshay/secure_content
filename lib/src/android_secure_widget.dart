@@ -15,7 +15,9 @@ class AndroidSecureWidget extends StatefulWidget {
   }) : super(key: key);
 
   /// The builder for child widget to be secured.
-  final Widget Function(BuildContext context, VoidCallback onInit, VoidCallback onDispose) builder;
+  final Widget Function(
+          BuildContext context, VoidCallback onInit, VoidCallback onDispose)
+      builder;
 
   /// Whether the child widget should be secured (dynamic change for the same widget).
   final bool isSecure;
@@ -119,7 +121,9 @@ class _AndroidSecureWidgetState extends State<AndroidSecureWidget> {
   @override
   Widget build(BuildContext context) {
     return PortalTarget(
-      portalFollower: widget.overlayWidgetBuilder != null ? widget.overlayWidgetBuilder!(context) : null,
+      portalFollower: widget.overlayWidgetBuilder != null
+          ? widget.overlayWidgetBuilder!(context)
+          : null,
       visible: widget.debug ? true : widget.isSecure && isBlurred,
       child: Container(
         decoration: widget.debug

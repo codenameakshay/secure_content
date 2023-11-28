@@ -18,7 +18,9 @@ class SecureWidget extends StatelessWidget {
   }) : super(key: key);
 
   /// The builder for child widget to be secured.
-  final Widget Function(BuildContext context, VoidCallback onInit, VoidCallback onDispose) builder;
+  final Widget Function(
+          BuildContext context, VoidCallback onInit, VoidCallback onDispose)
+      builder;
 
   /// Whether the child widget should be secured (dynamic change for the same widget).
   final bool isSecure;
