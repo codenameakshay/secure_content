@@ -53,10 +53,10 @@ packages:
     dependency: "direct main"
     description:
       name: cupertino_icons
-      sha256: "1989d917fbe8e6b39806207df5a3fdd3d816cbd090fac2ce26fb45e9a71476e5"
+      sha256: e35129dc44c9118cee2a5603506d823bab99c68393879edb440e0090d07586be
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.4"
+    version: "1.0.5"
   fake_async:
     dependency: transitive
     description:
@@ -82,10 +82,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_portal
-      sha256: "7b8e448657f6b166d0c6f1c08a59cd028b1c93c0f5b7491208798ad56669698e"
+      sha256: "4601b3dc24f385b3761721bd852a3f6c09cddd4e943dd184ed58ee1f43006257"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.1"
+    version: "1.1.4"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -100,10 +100,10 @@ packages:
     dependency: "direct main"
     description:
       name: fluttertoast
-      sha256: b528e78a4e69957bb8a33d9e8ceaa728801bb7c6ce599e811e49cf6d94d17fef
+      sha256: dfdde255317af381bfc1c486ed968d5a43a2ded9c931e87cbecd88767d6a71c1
       url: "https://pub.dev"
     source: hosted
-    version: "8.0.9"
+    version: "8.2.4"
   lints:
     dependency: transitive
     description:
@@ -156,18 +156,18 @@ packages:
     dependency: "direct main"
     description:
       name: provider
-      sha256: "7896193cf752c40ba7f7732a95264319a787871e5d628225357f5c909182bc06"
+      sha256: "9a96a0a19b594dbc5bf0f1f27d2bc67d5f95957359b461cd9feb44ed6ae75096"
       url: "https://pub.dev"
     source: hosted
-    version: "6.0.2"
+    version: "6.1.1"
   screen_capture_event:
     dependency: transitive
     description:
       name: screen_capture_event
-      sha256: d71136cf59c1d724378b48139ad238fe06e26be00e11243d65e18a4b8af3c71c
+      sha256: "49981745c19e86c3ea7df2b1982651f5f7fb439d293c72cc578c15d032731af7"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.0"
+    version: "1.1.1"
   screen_protector:
     dependency: transitive
     description:

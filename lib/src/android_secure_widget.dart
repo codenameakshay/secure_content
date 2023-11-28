@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:screen_capture_event/screen_capture_event.dart';
@@ -9,9 +7,9 @@ class AndroidSecureWidget extends StatefulWidget {
     required this.builder,
     required this.isSecure,
     this.overlayWidgetBuilder,
-    this.onScreenshotCaptured,
-    this.onScreenRecordingStart,
-    this.onScreenRecordingStop,
+    // this.onScreenshotCaptured,
+    // this.onScreenRecordingStart,
+    // this.onScreenRecordingStop,
     this.debug = false,
     Key? key,
   }) : super(key: key);
@@ -27,13 +25,13 @@ class AndroidSecureWidget extends StatefulWidget {
   final Widget Function(BuildContext context)? overlayWidgetBuilder;
 
   /// (Optional) Callback when screenshot is captured
-  final VoidCallback? onScreenshotCaptured;
+  // final Function(String filePath)? onScreenshotCaptured;
 
   /// (Optional) Callback when screenRecordingStart is detected
-  final VoidCallback? onScreenRecordingStart;
+  // final VoidCallback? onScreenRecordingStart;
 
   /// (Optional) Callback when screenRecordingStop is detected
-  final VoidCallback? onScreenRecordingStop;
+  // final VoidCallback? onScreenRecordingStop;
 
   /// (Optional) A bool to show overlay widget, so that debugging is easier. Default is false.
   final bool debug;
@@ -45,30 +43,32 @@ class AndroidSecureWidget extends StatefulWidget {
 class _AndroidSecureWidgetState extends State<AndroidSecureWidget> {
   late ScreenCaptureEvent screenListener;
   bool isBlurred = false;
-  bool previousIsBlurred = false;
-
-  void initialiseSecuring() {
-    initialiseIsBlurred();
-
-    if (Platform.isAndroid) {
-      screenListener.preventAndroidScreenShot(true);
-    }
-  }
-
-  void disposeSecuring() {
-    if (Platform.isAndroid) {
-      screenListener.preventAndroidScreenShot(false);
-    }
-  }
 
   @override
   void initState() {
-    super.initState();
     screenListener = ScreenCaptureEvent(false);
 
     if (widget.isSecure) {
       initialiseSecuring();
     }
+    super.initState();
+  }
+
+  void initialiseIsBlurred() async {
+    final isRecording = await screenListener.isRecording();
+    setState(() {
+      isBlurred = isRecording;
+    });
+    // if (isBlurred && widget.onScreenRecordingStart != null) {
+    //   widget.onScreenRecordingStart?.call();
+    // }
+  }
+
+  void initialiseSecuring() {
+    initialiseIsBlurred();
+
+    screenListener.preventAndroidScreenShot(true);
+    // _addListenerPreventScreenshot();
   }
 
   @override
@@ -83,30 +83,57 @@ class _AndroidSecureWidgetState extends State<AndroidSecureWidget> {
     super.didUpdateWidget(oldWidget);
   }
 
-  void initialiseIsBlurred() async {
-    final isRecording = await screenListener.isRecording();
-    setState(() {
-      isBlurred = isRecording;
-    });
-    if (isBlurred && widget.onScreenRecordingStart != null) {
-      widget.onScreenRecordingStart?.call();
-    }
-  }
-
   @override
   void dispose() async {
     disposeSecuring();
     super.dispose();
   }
 
+  void disposeSecuring() {
+    screenListener.preventAndroidScreenShot(false);
+    // _removeListenerPreventScreenshot();
+  }
+
+  // void _addListenerPreventScreenshot() async {
+  //   screenListener.addScreenShotListener((filePath) {
+  //     return widget.onScreenshotCaptured?.call(filePath);
+  //   });
+  //   screenListener.addScreenRecordListener((recorded) {
+  //     setState(() {
+  //       isBlurred = recorded;
+  //     });
+  //     if (isBlurred) {
+  //       widget.onScreenRecordingStart?.call();
+  //     } else {
+  //       widget.onScreenRecordingStop?.call();
+  //     }
+  //   });
+
+  //   screenListener.watch();
+  // }
+
+  // void _removeListenerPreventScreenshot() async {
+  //   screenListener.dispose();
+  // }
+
   @override
   Widget build(BuildContext context) {
     return PortalTarget(
-      portalFollower: widget.overlayWidgetBuilder != null
-          ? widget.overlayWidgetBuilder!(context)
-          : widget.builder(context, initialiseSecuring, disposeSecuring),
+      portalFollower: widget.overlayWidgetBuilder != null ? widget.overlayWidgetBuilder!(context) : null,
       visible: widget.debug ? true : widget.isSecure && isBlurred,
-      child: widget.builder(context, initialiseSecuring, disposeSecuring),
+      child: Container(
+        decoration: widget.debug
+            ? BoxDecoration(
+                color: Colors.amber,
+                border: Border.all(
+                  color: Colors.red,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(10),
+              )
+            : null,
+        child: widget.builder(context, initialiseSecuring, disposeSecuring),
+      ),
     );
   }
 }

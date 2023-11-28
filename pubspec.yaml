@@ -14,7 +14,7 @@ dependencies:
     sdk: flutter
   flutter_portal: ^1.1.1
   provider: ^6.0.2
-  screen_capture_event: ^1.1.0
+  screen_capture_event: ^1.1.1
   screen_protector: ^1.4.1
 
 dev_dependencies:

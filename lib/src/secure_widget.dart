@@ -27,13 +27,13 @@ class SecureWidget extends StatelessWidget {
   /// If not provided, a default secure widget will be shown in which the whole screen will be blurred.
   final Widget Function(BuildContext context)? overlayWidgetBuilder;
 
-  /// (Optional) Callback when screenshot is captured
+  /// (Optional) [iOS] Callback when screenshot is captured
   final VoidCallback? onScreenshotCaptured;
 
-  /// (Optional) Callback when screenRecordingStart is detected
+  /// (Optional) [iOS] Callback when screenRecordingStart is detected
   final VoidCallback? onScreenRecordingStart;
 
-  /// (Optional) Callback when screenRecordingStop is detected
+  /// (Optional) [iOS] Callback when screenRecordingStop is detected
   final VoidCallback? onScreenRecordingStop;
 
   /// (Optional) A bool to show overlay widget, so that debugging is easier. Default is false.
@@ -62,9 +62,9 @@ class SecureWidget extends StatelessWidget {
         : AndroidSecureWidget(
             builder: builder,
             isSecure: isSecure,
-            onScreenshotCaptured: onScreenshotCaptured,
-            onScreenRecordingStart: onScreenRecordingStart,
-            onScreenRecordingStop: onScreenRecordingStop,
+            // onScreenshotCaptured: (filePath) => onScreenshotCaptured,
+            // onScreenRecordingStart: onScreenRecordingStart,
+            // onScreenRecordingStop: onScreenRecordingStop,
             overlayWidgetBuilder: overlayWidgetBuilder,
             debug: debug,
           );
