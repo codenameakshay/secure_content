@@ -1,14 +1,14 @@
-<!-- 
+<!--
 This README describes the package. If you publish this package to pub.dev,
 this README's contents appear on the landing page for your package.
 
 For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/guides/libraries/writing-package-pages). 
+[writing package pages](https://dart.dev/guides/libraries/writing-package-pages).
 
 For general information about developing packages, see the Dart guide for
 [creating packages](https://dart.dev/guides/libraries/create-library-packages)
 and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/developing-packages). 
+[developing packages and plugins](https://flutter.dev/developing-packages).
 -->
 
 <h1 align="center">Secure Content</h1>
@@ -34,8 +34,11 @@ and the Flutter guide for
   </a>
 </p><br>
 
+## Screenshots
 
-https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4
+|                                      Android (screen recording)                                       |                   iOS (screenshot)                    |                   iOS (screen recording)                    |                 iOS (app switcher)                  |
+| :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------: | :---------------------------------------------------------: | :-------------------------------------------------: |
+| https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4 | <img src="screenshot/screenshot_ios.PNG" width="300"> | <img src="screenshot/screen_recording_ios.MP4" width="300"> | <img src="screenshot/app_switcher.MP4" width="300"> |
 
 ## Features
 
@@ -49,7 +52,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  secure_content: ^0.1.0
+  secure_content: ^1.0.0
 ```
 
 ### 2. Install it
@@ -75,6 +78,39 @@ Now in your `Dart` code, you can use:
 ```dart
 import 'package:secure_content/secure_content.dart';
 ```
+
+## Example
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:secure_content/secure_content.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('Secure Content Example'),
+        ),
+        body: SecureWidget(
+          isSecure: true,
+          builder: (context, onInit, onDispose) => Center(
+            child: Text('This is a secure widget'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+> **Note**: The SecureWidget should be the root widget of your app, or the widget which you want to protect.
+> See the [example](https://pub.dev/packages/secure_content/example) for more details.
 
 # Bugs or Requests
 

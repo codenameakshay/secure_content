@@ -1,6 +1,6 @@
 name: secure_content
-description: Protect your app from screenshots, screen recording & on recent apps screen. Works for both Android & iOS, and is in development.
-version: 0.1.0
+description: Protect your app from screenshots, screen recording & on recent apps screen. Works for both Android & iOS, using native code.
+version: 1.0.0
 homepage: https://hashstudios.dev
 repository: https://github.com/codenameakshay/secure_content
 
