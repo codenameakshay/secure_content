@@ -38,7 +38,7 @@ and the Flutter guide for
 
 |                                      Android (screen recording)                                       |                   iOS (screenshot)                    |                   iOS (screen recording)                    |                 iOS (app switcher)                  |
 | :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------: | :---------------------------------------------------------: | :-------------------------------------------------: |
-| https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4 | <img src="screenshot/screenshot_ios.PNG" width="300"> | <img src="screenshot/screen_recording_ios.MP4" width="300"> | <img src="screenshot/app_switcher.MP4" width="300"> |
+| https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4 | <img src="screenshot/screenshot_ios.PNG" width="300"> | https://github.com/user-attachments/assets/0b4e10ac-d592-4b5b-92bf-72f51b2cf570 | https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec |
 
 ## Features
 
