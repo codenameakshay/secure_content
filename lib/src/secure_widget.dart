@@ -64,9 +64,6 @@ class SecureWidget extends StatelessWidget {
         : AndroidSecureWidget(
             builder: builder,
             isSecure: isSecure,
-            // onScreenshotCaptured: (filePath) => onScreenshotCaptured,
-            // onScreenRecordingStart: onScreenRecordingStart,
-            // onScreenRecordingStop: onScreenRecordingStop,
             overlayWidgetBuilder: overlayWidgetBuilder,
             debug: debug,
           );

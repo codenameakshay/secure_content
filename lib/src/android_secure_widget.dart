@@ -7,9 +7,6 @@ class AndroidSecureWidget extends StatefulWidget {
     required this.builder,
     required this.isSecure,
     this.overlayWidgetBuilder,
-    // this.onScreenshotCaptured,
-    // this.onScreenRecordingStart,
-    // this.onScreenRecordingStop,
     this.debug = false,
     Key? key,
   }) : super(key: key);
@@ -25,15 +22,6 @@ class AndroidSecureWidget extends StatefulWidget {
   /// (Optional) Widget to be shown when the child widget is secured.
   /// If not provided, a default secure widget will be shown in which the whole screen will be blurred.
   final Widget Function(BuildContext context)? overlayWidgetBuilder;
-
-  /// (Optional) Callback when screenshot is captured
-  // final Function(String filePath)? onScreenshotCaptured;
-
-  /// (Optional) Callback when screenRecordingStart is detected
-  // final VoidCallback? onScreenRecordingStart;
-
-  /// (Optional) Callback when screenRecordingStop is detected
-  // final VoidCallback? onScreenRecordingStop;
 
   /// (Optional) A bool to show overlay widget, so that debugging is easier. Default is false.
   final bool debug;
@@ -61,16 +49,12 @@ class _AndroidSecureWidgetState extends State<AndroidSecureWidget> {
     setState(() {
       isBlurred = isRecording;
     });
-    // if (isBlurred && widget.onScreenRecordingStart != null) {
-    //   widget.onScreenRecordingStart?.call();
-    // }
   }
 
   void initialiseSecuring() {
     initialiseIsBlurred();
 
     screenListener.preventAndroidScreenShot(true);
-    // _addListenerPreventScreenshot();
   }
 
   @override
@@ -93,30 +77,7 @@ class _AndroidSecureWidgetState extends State<AndroidSecureWidget> {
 
   void disposeSecuring() {
     screenListener.preventAndroidScreenShot(false);
-    // _removeListenerPreventScreenshot();
   }
-
-  // void _addListenerPreventScreenshot() async {
-  //   screenListener.addScreenShotListener((filePath) {
-  //     return widget.onScreenshotCaptured?.call(filePath);
-  //   });
-  //   screenListener.addScreenRecordListener((recorded) {
-  //     setState(() {
-  //       isBlurred = recorded;
-  //     });
-  //     if (isBlurred) {
-  //       widget.onScreenRecordingStart?.call();
-  //     } else {
-  //       widget.onScreenRecordingStop?.call();
-  //     }
-  //   });
-
-  //   screenListener.watch();
-  // }
-
-  // void _removeListenerPreventScreenshot() async {
-  //   screenListener.dispose();
-  // }
 
   @override
   Widget build(BuildContext context) {
