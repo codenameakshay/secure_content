@@ -38,8 +38,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/secure_content/ios"
 
 SPEC CHECKSUMS:
-  Flutter: f04841e97a9d0b0a8025694d0796dd46242b2854
-  fluttertoast: 16fbe6039d06a763f3533670197d01fc73459037
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  fluttertoast: 31b00dabfa7fb7bacd9e7dbee580d7a2ff4bf265
   screen_capture_event: bcf965bb31968a51c08ad3698725c5ad8c597124
   screen_protector: 6f92086bd2f2f4b54f54913289b9d1310610140b
   ScreenProtectorKit: 83a6281b02c7a5902ee6eac4f5045f674e902ae4
@@ -48,4 +48,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: 4e8f8b2be68aeea4c0d5beb6ff1e79fface1d048
 
-COCOAPODS: 1.13.0
+COCOAPODS: 1.15.2
