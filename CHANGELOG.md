@@ -1,3 +1,7 @@
+## 1.0.1
+
+- Updated to Flutter v3.29.2
+
 ## 1.0.0
 
 - First stable release
