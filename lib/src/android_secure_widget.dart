@@ -44,6 +44,7 @@ class _AndroidSecureWidgetState extends State<AndroidSecureWidget> {
 
   void initialiseIsBlurred() async {
     final isRecording = await screenListener.isRecording();
+    if (!mounted) return;
     setState(() {
       isBlurred = isRecording;
     });
