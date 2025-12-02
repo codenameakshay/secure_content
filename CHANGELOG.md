@@ -1,3 +1,8 @@
+## 1.0.2
+
+- Updated dependencies.
+- Migrate to declarative Gradle plugins (Android).
+
 ## 1.0.1
 
 - Updated to Flutter v3.29.2
