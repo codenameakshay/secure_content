@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:screen_capture_event/screen_capture_event.dart';
 
@@ -25,7 +26,7 @@ class AndroidSecureWidget extends StatefulWidget {
   final bool debug;
 
   @override
-  _AndroidSecureWidgetState createState() => _AndroidSecureWidgetState();
+  State<AndroidSecureWidget> createState() => _AndroidSecureWidgetState();
 }
 
 class _AndroidSecureWidgetState extends State<AndroidSecureWidget> {

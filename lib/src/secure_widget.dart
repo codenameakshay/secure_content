@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
 import 'package:secure_content/secure_content.dart';
 
 class SecureWidget extends StatelessWidget {

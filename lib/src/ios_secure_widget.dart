@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:screen_protector/lifecycle/lifecycle_state.dart';
 import 'package:screen_protector/screen_protector.dart';
