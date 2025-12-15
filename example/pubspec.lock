@@ -196,10 +196,10 @@ packages:
     dependency: transitive
     description:
       name: screen_protector
-      sha256: a4f63e9b39edac74b0ec7c0a860d45a424f0bf49283dc664d6b7eac64ac5c5be
+      sha256: f4f415b5f9ba05303bbc58fbae67554f7285d56a63f753c5280701cd6158df85
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.8"
+    version: "1.4.11"
   secure_content:
     dependency: "direct main"
     description:

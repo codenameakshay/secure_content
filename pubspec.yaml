@@ -15,7 +15,7 @@ dependencies:
   flutter_portal: ^1.1.4
   provider: ^6.1.5+1
   screen_capture_event: ^1.2.0
-  screen_protector: ^1.4.8
+  screen_protector: ^1.4.11
 
 dev_dependencies:
   flutter_test:
