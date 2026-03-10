@@ -5,59 +5,48 @@ import android.graphics.Color
 import android.os.Build
 import android.view.WindowManager
 import androidx.annotation.NonNull
+import com.codenameakshay.secure_content.pigeon.ProtectionConfig
+import com.codenameakshay.secure_content.pigeon.SecureContentFlutterApi
+import com.codenameakshay.secure_content.pigeon.SecureContentHostApi
+import com.codenameakshay.secure_content.pigeon.SecureEvent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.EventChannel
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
+import java.time.Instant
 
 /** SecureContentPlugin */
-class SecureContentPlugin :
-    FlutterPlugin,
-    MethodChannel.MethodCallHandler,
-    EventChannel.StreamHandler,
-    ActivityAware {
+class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
-    private lateinit var methodChannel: MethodChannel
-    private lateinit var eventChannel: EventChannel
+    private lateinit var binding: FlutterPlugin.FlutterPluginBinding
 
     private var activity: Activity? = null
-    private var eventSink: EventChannel.EventSink? = null
+    private var flutterApi: SecureContentFlutterApi? = null
 
     private var secureEnabled: Boolean = false
     private var appSwitcherProtectionEnabled: Boolean = true
     private var appSwitcherColor: Int = Color.BLACK
 
-    override fun onAttachedToEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-        methodChannel = MethodChannel(binding.binaryMessenger, "secure_content/methods")
-        methodChannel.setMethodCallHandler(this)
-
-        eventChannel = EventChannel(binding.binaryMessenger, "secure_content/events")
-        eventChannel.setStreamHandler(this)
+    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        binding = flutterPluginBinding
+        flutterApi = SecureContentFlutterApi(binding.binaryMessenger)
+        SecureContentHostApi.setUp(binding.binaryMessenger, this)
+        emitEvent("platformReady")
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-        methodChannel.setMethodCallHandler(null)
-        eventChannel.setStreamHandler(null)
+        SecureContentHostApi.setUp(binding.binaryMessenger, null)
+        flutterApi = null
     }
 
-    override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: MethodChannel.Result) {
-        when (call.method) {
-            "configureProtection" -> {
-                secureEnabled = call.argument<Boolean>("enabled") ?: false
-                appSwitcherProtectionEnabled = call.argument<Boolean>("protectInAppSwitcher") ?: true
-                appSwitcherColor = call.argument<Int>("appSwitcherColor") ?: Color.BLACK
-                applyProtection()
-                result.success(null)
-            }
+    override fun configureProtection(config: ProtectionConfig) {
+        secureEnabled = config.enabled
+        appSwitcherProtectionEnabled = config.protectInAppSwitcher
+        appSwitcherColor = config.appSwitcherColor.toInt()
+        applyProtection()
+    }
 
-            "isScreenCaptured" -> {
-                result.success(false)
-            }
-
-            else -> result.notImplemented()
-        }
+    override fun isScreenCaptured(): Boolean {
+        return false
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -78,21 +67,6 @@ class SecureContentPlugin :
         activity = null
     }
 
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        eventSink = events
-        eventSink?.success(
-            mapOf(
-                "type" to "platformReady",
-                "platform" to "android",
-                "timestamp" to System.currentTimeMillis().toString()
-            )
-        )
-    }
-
-    override fun onCancel(arguments: Any?) {
-        eventSink = null
-    }
-
     private fun applyProtection() {
         val currentActivity = activity ?: return
         currentActivity.runOnUiThread {
@@ -106,5 +80,19 @@ class SecureContentPlugin :
                 currentActivity.window.navigationBarColor = appSwitcherColor
             }
         }
+    }
+
+    private fun emitEvent(type: String) {
+        val event = SecureEvent(
+            type = type,
+            platform = "android",
+            timestamp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Instant.now().toString()
+            } else {
+                System.currentTimeMillis().toString()
+            },
+        )
+
+        flutterApi?.onEvent(event) { _ -> }
     }
 }

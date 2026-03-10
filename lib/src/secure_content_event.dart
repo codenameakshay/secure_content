@@ -1,3 +1,5 @@
+import 'pigeon/secure_content_api.g.dart' as pigeon;
+
 enum SecureContentEventType {
   screenshotCaptured,
   recordingStarted,
@@ -20,15 +22,16 @@ class SecureContentEvent {
   final DateTime? timestamp;
   final Map<String, Object?>? payload;
 
-  static SecureContentEvent fromMap(Map<Object?, Object?> map) {
-    final rawType = map['type']?.toString() ?? '';
+  factory SecureContentEvent.fromPigeon(pigeon.SecureEvent event) {
     return SecureContentEvent(
-      type: _eventTypeFromString(rawType),
-      platform: map['platform']?.toString(),
-      timestamp: _tryParseDateTime(map['timestamp']?.toString()),
-      payload: map.cast<Object?, Object?>().map(
-        (key, value) => MapEntry(key.toString(), value),
-      ),
+      type: _eventTypeFromString(event.type),
+      platform: event.platform,
+      timestamp: _tryParseDateTime(event.timestamp),
+      payload: <String, Object?>{
+        'type': event.type,
+        'platform': event.platform,
+        'timestamp': event.timestamp,
+      },
     );
   }
 

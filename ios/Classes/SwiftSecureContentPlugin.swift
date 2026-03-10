@@ -1,10 +1,8 @@
 import Flutter
 import UIKit
 
-public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
-  private var methodChannel: FlutterMethodChannel?
-  private var eventChannel: FlutterEventChannel?
-  private var eventSink: FlutterEventSink?
+public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi {
+  private var flutterApi: SecureContentFlutterApi?
 
   private var secureEnabled = false
   private var protectInAppSwitcher = true
@@ -15,60 +13,27 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, FlutterStreamHan
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = SwiftSecureContentPlugin()
+    instance.flutterApi = SecureContentFlutterApi(binaryMessenger: registrar.messenger())
 
-    let methodChannel = FlutterMethodChannel(name: "secure_content/methods", binaryMessenger: registrar.messenger())
-    registrar.addMethodCallDelegate(instance, channel: methodChannel)
-
-    let eventChannel = FlutterEventChannel(name: "secure_content/events", binaryMessenger: registrar.messenger())
-    eventChannel.setStreamHandler(instance)
-
-    instance.methodChannel = methodChannel
-    instance.eventChannel = eventChannel
+    SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
     instance.setupObservers()
-  }
-
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-    case "configureProtection":
-      guard let args = call.arguments as? [String: Any] else {
-        result(
-          FlutterError(
-            code: "invalid_args",
-            message: "Expected argument map",
-            details: nil
-          )
-        )
-        return
-      }
-
-      secureEnabled = args["enabled"] as? Bool ?? false
-      protectInAppSwitcher = args["protectInAppSwitcher"] as? Bool ?? true
-      appSwitcherColor = Self.color(from: args["appSwitcherColor"] as? NSNumber)
-
-      applyProtectionState()
-      result(nil)
-
-    case "isScreenCaptured":
-      result(UIScreen.main.isCaptured)
-
-    default:
-      result(FlutterMethodNotImplemented)
-    }
-  }
-
-  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    eventSink = events
-    emit(type: "platformReady")
-    return nil
-  }
-
-  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    eventSink = nil
-    return nil
+    instance.emit(type: "platformReady")
   }
 
   deinit {
     NotificationCenter.default.removeObserver(self)
+  }
+
+  public func configureProtection(config: ProtectionConfig) throws {
+    secureEnabled = config.enabled
+    protectInAppSwitcher = config.protectInAppSwitcher
+    appSwitcherColor = Self.color(from: config.appSwitcherColor)
+
+    applyProtectionState()
+  }
+
+  public func isScreenCaptured() throws -> Bool {
+    return UIScreen.main.isCaptured
   }
 
   private func setupObservers() {
@@ -182,23 +147,21 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, FlutterStreamHan
   }
 
   private func emit(type: String) {
-    eventSink?([
-      "type": type,
-      "platform": "ios",
-      "timestamp": ISO8601DateFormatter().string(from: Date())
-    ])
+    let event = SecureEvent(
+      type: type,
+      platform: "ios",
+      timestamp: ISO8601DateFormatter().string(from: Date())
+    )
+
+    flutterApi?.onEvent(event: event) { _ in }
   }
 
-  private static func color(from number: NSNumber?) -> UIColor {
-    guard let number else {
-      return .black
-    }
-
-    let argb = UInt32(truncating: number)
-    let alpha = CGFloat((argb >> 24) & 0xff) / 255.0
-    let red = CGFloat((argb >> 16) & 0xff) / 255.0
-    let green = CGFloat((argb >> 8) & 0xff) / 255.0
-    let blue = CGFloat(argb & 0xff) / 255.0
+  private static func color(from argb: Int64) -> UIColor {
+    let value = UInt32(truncatingIfNeeded: argb)
+    let alpha = CGFloat((value >> 24) & 0xff) / 255.0
+    let red = CGFloat((value >> 16) & 0xff) / 255.0
+    let green = CGFloat((value >> 8) & 0xff) / 255.0
+    let blue = CGFloat(value & 0xff) / 255.0
 
     return UIColor(red: red, green: green, blue: blue, alpha: alpha)
   }
