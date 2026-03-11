@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.os.Build
 import android.view.WindowManager
 import androidx.annotation.NonNull
+import androidx.annotation.RequiresApi
 import com.codenameakshay.secure_content.pigeon.ProtectionConfig
 import com.codenameakshay.secure_content.pigeon.SecureContentFlutterApi
 import com.codenameakshay.secure_content.pigeon.SecureContentHostApi
@@ -21,6 +22,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
     private var activity: Activity? = null
     private var flutterApi: SecureContentFlutterApi? = null
+    private var screenshotCallback: Activity.ScreenCaptureCallback? = null
 
     private var secureEnabled: Boolean = false
     private var appSwitcherProtectionEnabled: Boolean = true
@@ -51,20 +53,65 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        registerScreenshotCallbackIfAvailable()
         applyProtection()
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        unregisterScreenshotCallbackIfAvailable()
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
+        registerScreenshotCallbackIfAvailable()
         applyProtection()
     }
 
     override fun onDetachedFromActivity() {
+        unregisterScreenshotCallbackIfAvailable()
         activity = null
+    }
+
+    private fun registerScreenshotCallbackIfAvailable() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return
+        }
+        registerScreenshotCallbackApi34()
+    }
+
+    private fun unregisterScreenshotCallbackIfAvailable() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return
+        }
+        unregisterScreenshotCallbackApi34()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun registerScreenshotCallbackApi34() {
+        val currentActivity = activity ?: return
+        if (screenshotCallback != null) {
+            return
+        }
+
+        val executor = currentActivity.mainExecutor
+        val callback = Activity.ScreenCaptureCallback {
+            if (secureEnabled) {
+                emitEvent("screenshotCaptured")
+            }
+        }
+
+        currentActivity.registerScreenCaptureCallback(executor, callback)
+        screenshotCallback = callback
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun unregisterScreenshotCallbackApi34() {
+        val currentActivity = activity ?: return
+        val callback = screenshotCallback ?: return
+
+        currentActivity.unregisterScreenCaptureCallback(callback)
+        screenshotCallback = null
     }
 
     private fun applyProtection() {

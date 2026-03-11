@@ -182,7 +182,7 @@ secureContent.preventScreenshotAndroid(false);
 | ------------------------------- | ------------------------------------- | ----------------------- |
 | Screenshot Prevention           | ✅                                    | ✅                      |
 | Screen Recording Prevention     | ✅ (Shows black screen)               | ✅ (Shows black screen) |
-| Screenshot Detection Callback   | ✅                                    | ❌                      |
+| Screenshot Detection Callback   | ✅                                    | ✅ (Android 14+)        |
 | Screen Recording Start Callback | ✅                                    | ❌                      |
 | Screen Recording Stop Callback  | ✅                                    | ❌                      |
 | App Switcher Protection         | ✅                                    | ✅                      |
@@ -202,7 +202,8 @@ secureContent.preventScreenshotAndroid(false);
 
 - Blocks screenshots
 - Shows black screen during recording
-- No callback support for detection events
+- Supports screenshot callback on Android 14+
+- No callback support for screen recording start/stop events
 - Supports full app protection through `preventScreenshotAndroid()`
 - Protection can be applied globally or widget-specific
 
