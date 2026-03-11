@@ -39,7 +39,7 @@
 
 ```yaml
 dependencies:
-  secure_content: ^2.1.0-beta.1
+  secure_content: ^2.0.0-beta.1
 ```
 
 ## Quick Start
