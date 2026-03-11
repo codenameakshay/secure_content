@@ -1,19 +1,6 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
-
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/guides/libraries/writing-package-pages).
-
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-library-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/developing-packages).
--->
-
 <h1 align="center">Secure Content</h1>
 
-<p align="center">A flutter package which allows Flutter apps to wrap up some widgets with a SecureWidget which can stop user from screen recording or screenshot the widget. Works on both Android & iOS.</p><br>
+<p align="center">Protect sensitive Flutter UI from screenshots, recording visibility, app switcher previews, and runtime risk states on Android and iOS.</p><br>
 
 <p align="center">
   <a href="https://flutter.dev">
@@ -28,10 +15,6 @@ and the Flutter guide for
     <img src="https://img.shields.io/github/license/aagarwal1012/animated-text-kit?color=red"
       alt="License: MIT" />
   </a>
-  <a href="https://www.paypal.me/codenameakshay">
-    <img src="https://img.shields.io/badge/Donate-PayPal-00457C?logo=paypal"
-      alt="Donate" />
-  </a>
 </p><br>
 
 ## Screenshots
@@ -42,239 +25,117 @@ and the Flutter guide for
 
 ## Features
 
-- 🔒 **Screenshot Protection**: Prevents users from taking screenshots of sensitive content
-- 📹 **Screen Recording Protection**: Blocks screen recording attempts
-- 📱 **App Switcher Protection**: Secures content in the app switcher preview
-- ⚡ **Dynamic Security**: Enable/disable protection on the fly
-- 🎨 **Customizable Overlay**: Define custom widgets to show when content is protected
-- 📢 **Event Callbacks**: Get notified of screenshot and recording attempts
-- 💪 **Cross-Platform**: Works on both Android & iOS
-- 🔄 **State Aware**: Maintains security across route transitions
+- Screenshot prevention and recording obscuring
+- App switcher protection with configurable color
+- Android 14+ screenshot callback support
+- Biometric/device credential re-auth hooks
+- Inactivity auto-lock for secure areas
+- Integrity risk checks (root/jailbreak/debugger/emulator heuristics)
+- Soft mode events and optional hard-block mode
+- Sensitive clipboard with TTL-based auto-clear
+- Risk-state watermark overlay (only shown when needed)
 
 ## Installation
 
-Add this to your package's `pubspec.yaml` file:
-
 ```yaml
 dependencies:
-  secure_content: ^1.0.1
+  secure_content: ^2.1.0-beta.1
 ```
 
-## Basic Setup
-
-1. First, wrap your MaterialApp with Portal widget:
+## Quick Start
 
 ```dart
-void main() {
-  runApp(
-    Portal(
-      child: MaterialApp(
-        home: MyHomePage(),
-      ),
-    ),
-  );
-}
-```
-
-2. Import the package:
-
-```dart
+import 'package:flutter/material.dart';
 import 'package:secure_content/secure_content.dart';
+
+SecureContentScope(
+  enabled: true,
+  policy: const SecureContentPolicy(
+    requireBiometricOnResume: true,
+    inactivityTimeout: Duration(seconds: 30),
+    enableIntegrityChecks: true,
+    hardBlockOnIntegrityRisk: false,
+    enableRiskWatermark: true,
+    watermarkText: 'CONFIDENTIAL',
+  ),
+  onEvent: (event) {
+    debugPrint('Secure event: ${event.type.name}');
+  },
+  child: const YourSensitiveWidget(),
+)
 ```
 
-## 🚨 Important Note
-
-This package requires wrapping your `MaterialApp` with the `Portal` widget from the `flutter_portal` package. This is a crucial step to make the secure content functionality work properly. Here's how to do it:
+## Global Protection
 
 ```dart
-import 'package:flutter_portal/flutter_portal.dart';
-
-// In your app's root widget:
-return Portal(
-  child: MaterialApp(
-    // Your MaterialApp configuration
-  ),
+await SecureContent.setGlobalProtection(
+  true,
+  protectInAppSwitcher: true,
+  appSwitcherColor: Colors.black,
 );
 ```
 
-If you don't wrap your `MaterialApp` with `Portal`, you'll encounter the following error:
-
-```
-PortalNotFoundError: Could not find a Portal above this PortalTarget
-```
-
-## Usage
-
-### Basic Implementation
-
-Wrap any widget that needs to be protected with `SecureWidget`:
+## Clipboard TTL
 
 ```dart
-SecureWidget(
-  isSecure: true,
-  builder: (context, onInit, onDispose) => Text(
-    'This content is protected',
-    style: Theme.of(context).textTheme.headlineMedium,
-  ),
-)
+await SecureContent.setSensitiveClipboard(
+  'one-time code: 123456',
+  clearAfter: const Duration(seconds: 10),
+);
 ```
 
-### Advanced Implementation
+## Events
+
+Listen to all secure events globally:
 
 ```dart
-SecureWidget(
-  isSecure: true,
-  onScreenshotCaptured: () {
-    // Handle screenshot attempt
-    print('Screenshot attempted!');
-  },
-  onScreenRecordingStart: () {
-    // Handle recording start
-    print('Screen recording started!');
-  },
-  onScreenRecordingStop: () {
-    // Handle recording stop
-    print('Screen recording stopped!');
-  },
-  builder: (context, onInit, onDispose) => YourWidget(),
-  overlayWidgetBuilder: (context) => BackdropFilter(
-    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-    child: const SizedBox(),
-  ),
-  appSwitcherMenuColor: Colors.black,
-  protectInAppSwitcherMenu: true,
-)
+SecureContent.events.listen((event) {
+  debugPrint('Secure event: ${event.type.name}');
+});
 ```
 
-## Configuration Options
+Key event types include:
+- `screenshotCaptured`
+- `recordingStarted` / `recordingStopped`
+- `biometricAuthSucceeded` / `biometricAuthFailed` / `biometricUnavailable`
+- `integritySafe` / `integrityRiskDetected`
+- `clipboardSet` / `clipboardCleared`
+- `idleLockActivated` / `idleLockReleased`
 
-| Parameter                  | Type                                                        | Description                              |
-| -------------------------- | ----------------------------------------------------------- | ---------------------------------------- |
-| `isSecure`                 | `bool`                                                      | Enable/disable protection                |
-| `builder`                  | `Widget Function(BuildContext, VoidCallback, VoidCallback)` | Builder for the protected content        |
-| `overlayWidgetBuilder`     | `Widget Function(BuildContext)?`                            | Custom overlay when content is protected |
-| `onScreenshotCaptured`     | `VoidCallback?`                                             | Callback for screenshot attempts         |
-| `onScreenRecordingStart`   | `VoidCallback?`                                             | Callback when recording starts           |
-| `onScreenRecordingStop`    | `VoidCallback?`                                             | Callback when recording stops            |
-| `debug`                    | `bool`                                                      | Show overlay widget for debugging        |
-| `protectInAppSwitcherMenu` | `bool`                                                      | Enable protection in app switcher        |
-| `appSwitcherMenuColor`     | `Color`                                                     | Background color in app switcher         |
+## Platform Support
 
-## Protecting Entire App
+| Feature                         | iOS | Android |
+| ------------------------------- | --- | ------- |
+| Screenshot Prevention           | ✅  | ✅      |
+| Screen Recording Prevention     | ✅  | ✅      |
+| Screenshot Detection Callback   | ✅  | ✅ (Android 14+) |
+| Screen Recording Start Callback | ✅  | ❌      |
+| Screen Recording Stop Callback  | ✅  | ❌      |
+| Biometric Re-Auth               | ✅  | ✅      |
+| Inactivity Auto-Lock            | ✅  | ✅      |
+| Integrity Risk Check            | ✅  | ✅      |
+| Hard Block Mode                 | ✅  | ✅      |
+| Sensitive Clipboard TTL         | ✅  | ✅      |
+| Risk-State Watermark            | ✅  | ✅      |
+| App Switcher Protection         | ✅  | ✅      |
+| Dynamic Security Toggle         | ✅  | ✅      |
+| Full App Protection             | ✅  | ✅      |
 
-To protect your entire app on Android:
+## Notes
 
-```dart
-final secureContent = SecureContent();
-
-// Enable protection
-secureContent.preventScreenshotAndroid(true);
-
-// Disable protection
-secureContent.preventScreenshotAndroid(false);
-```
-
-## Platform-Specific Behavior
-
-### Feature Comparison
-
-| Feature                         | iOS                                   | Android                 |
-| ------------------------------- | ------------------------------------- | ----------------------- |
-| Screenshot Prevention           | ✅                                    | ✅                      |
-| Screen Recording Prevention     | ✅ (Shows black screen)               | ✅ (Shows black screen) |
-| Screenshot Detection Callback   | ✅                                    | ✅ (Android 14+)        |
-| Screen Recording Start Callback | ✅                                    | ❌                      |
-| Screen Recording Stop Callback  | ✅                                    | ❌                      |
-| App Switcher Protection         | ✅                                    | ✅                      |
-| Custom Overlay Support          | ✅                                    | ✅                      |
-| Dynamic Security Toggle         | ✅                                    | ✅                      |
-| Full App Protection             | ✅ (Add widget to top of widget tree) | ✅                      |
-
-### iOS
-
-- Shows black screen during screen recording
-- Prevents screenshots
-- Provides callbacks for screenshot and screen recording events
-- Customizable protection in app switcher
-- Protection is widget-specific
-
-### Android
-
-- Blocks screenshots
-- Shows black screen during recording
-- Supports screenshot callback on Android 14+
-- No callback support for screen recording start/stop events
-- Supports full app protection through `preventScreenshotAndroid()`
-- Protection can be applied globally or widget-specific
-
-## Best Practices
-
-1. **Platform-Specific Implementation**:
-
-   - For iOS, utilize callbacks to provide user feedback
-   - For Android, consider using global protection if needed
-   - For iOS, use `SecureWidget` at the top of the widget tree, for global protection
-
-   ```dart
-   // iOS-specific implementation
-   SecureWidget(
-     isSecure: true,
-     onScreenshotCaptured: Platform.isIOS ? () {
-       // Only triggered on iOS
-       showAlert('Screenshot attempted');
-     } : null,
-     builder: (context, onInit, onDispose) => YourWidget(),
-   )
-
-   // Android global protection
-   if (Platform.isAndroid) {
-     SecureContent().preventScreenshotAndroid(true);
-   }
-   ```
-
-2. **Performance**: Only wrap widgets that need protection to maintain optimal performance
-3. **State Management**: Use `isSecure` to dynamically toggle protection
-4. **User Experience**: Provide alternative feedback mechanisms for Android
-5. **Testing**: Test protection in both debug and release modes on both platforms
+- Android screenshot callback requires Android 14+.
+- Android system clipboard "Copied to clipboard" toast is controlled by the OS and cannot be disabled by apps.
+- Integrity checks are heuristic signals, not a guaranteed anti-tamper boundary.
 
 ## Example
 
-A complete example showing different use cases:
-
-```dart
-class SecureScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Secure Screen')),
-      body: Column(
-        children: [
-          // Regular content
-          Text('This content can be captured'),
-
-          // Secure content
-          SecureWidget(
-            isSecure: true,
-            onScreenshotCaptured: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Screenshots not allowed!')),
-              );
-            },
-            builder: (context, onInit, onDispose) => Container(
-              padding: EdgeInsets.all(16),
-              child: Text('This content is protected'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+See `example/lib/main.dart` for a complete implementation including:
+- global protection toggle
+- biometric trigger
+- integrity check trigger
+- clipboard TTL action
+- hard-block mode toggle
+- secure scope with policy
 
 ## License
 

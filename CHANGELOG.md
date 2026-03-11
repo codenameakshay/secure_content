@@ -1,3 +1,14 @@
+## 2.1.0-beta.1
+
+- Added Android and iOS biometric re-auth APIs and events.
+- Added inactivity auto-lock support through `SecureContentPolicy` and scope-level lock overlays.
+- Added integrity risk checks (root/jailbreak/debugger/emulator heuristics) with soft mode events and hard-block mode behavior.
+- Added sensitive clipboard APIs with TTL-based auto-clear and clipboard lifecycle events.
+- Added risk-state watermark support (shown during capture/lock/background/integrity risk states).
+- Added Android 14+ screenshot callback support and explicit platform documentation.
+- Updated Android plugin/tooling setup (AGP, Kotlin, build tools) and improved run/build compatibility.
+- Refreshed README and example docs to match v2 API and current feature matrix.
+
 ## 2.0.0
 
 - Breaking: redesigned API around `SecureContentScope`, typed events, and controller-driven global protection.

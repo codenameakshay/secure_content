@@ -1,5 +1,7 @@
 import Flutter
+import LocalAuthentication
 import UIKit
+import Darwin
 
 public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi {
   private var flutterApi: SecureContentFlutterApi?
@@ -10,6 +12,7 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
 
   private let captureOverlayTag = 991001
   private let appSwitcherOverlayTag = 991002
+  private var clipboardClearWorkItem: DispatchWorkItem?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = SwiftSecureContentPlugin()
@@ -34,6 +37,54 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
 
   public func isScreenCaptured() throws -> Bool {
     return UIScreen.main.isCaptured
+  }
+
+  public func requestBiometricAuth(reason: String) throws {
+    let context = LAContext()
+    var error: NSError?
+
+    guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+      emit(type: "biometricUnavailable")
+      return
+    }
+
+    let localizedReason = reason.isEmpty ? "Authenticate" : reason
+    context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: localizedReason) {
+      [weak self] success, _ in
+      DispatchQueue.main.async {
+        self?.emit(type: success ? "biometricAuthSucceeded" : "biometricAuthFailed")
+      }
+    }
+  }
+
+  public func checkIntegrity() throws {
+    let riskDetected = isJailbroken() || isDebuggerAttached() || isRunningOnSimulator()
+    emit(type: riskDetected ? "integrityRiskDetected" : "integritySafe")
+  }
+
+  public func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws {
+    UIPasteboard.general.string = content
+    emit(type: "clipboardSet")
+
+    clipboardClearWorkItem?.cancel()
+    clipboardClearWorkItem = nil
+
+    guard clearAfterMs > 0 else {
+      return
+    }
+
+    let workItem = DispatchWorkItem { [weak self] in
+      try? self?.clearSensitiveClipboard()
+    }
+    clipboardClearWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(clearAfterMs)), execute: workItem)
+  }
+
+  public func clearSensitiveClipboard() throws {
+    UIPasteboard.general.string = ""
+    clipboardClearWorkItem?.cancel()
+    clipboardClearWorkItem = nil
+    emit(type: "clipboardCleared")
   }
 
   private func setupObservers() {
@@ -154,6 +205,58 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
     )
 
     flutterApi?.onEvent(event: event) { _ in }
+  }
+
+  private func isRunningOnSimulator() -> Bool {
+    #if targetEnvironment(simulator)
+      return true
+    #else
+      return false
+    #endif
+  }
+
+  private func isJailbroken() -> Bool {
+    #if targetEnvironment(simulator)
+      return false
+    #else
+      let suspiciousPaths = [
+        "/Applications/Cydia.app",
+        "/Library/MobileSubstrate/MobileSubstrate.dylib",
+        "/bin/bash",
+        "/usr/sbin/sshd",
+        "/etc/apt",
+        "/private/var/lib/apt/",
+      ]
+
+      if suspiciousPaths.contains(where: { FileManager.default.fileExists(atPath: $0) }) {
+        return true
+      }
+
+      let testPath = "/private/secure_content_jb_test.txt"
+      do {
+        try "test".write(toFile: testPath, atomically: true, encoding: .utf8)
+        try FileManager.default.removeItem(atPath: testPath)
+        return true
+      } catch {
+        return false
+      }
+    #endif
+  }
+
+  private func isDebuggerAttached() -> Bool {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+
+    let result = name.withUnsafeMutableBufferPointer { pointer in
+      sysctl(pointer.baseAddress, 4, &info, &size, nil, 0)
+    }
+
+    if result != 0 {
+      return false
+    }
+
+    return (info.kp_proc.p_flag & P_TRACED) != 0
   }
 
   private static func color(from argb: Int64) -> UIColor {

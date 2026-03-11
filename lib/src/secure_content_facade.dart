@@ -32,4 +32,25 @@ class SecureContent {
   static Future<bool> isScreenCaptured() {
     return _service.isScreenCaptured();
   }
+
+  static Future<void> requestBiometricAuth({
+    String reason = 'Authenticate to continue',
+  }) {
+    return _service.requestBiometricAuth(reason);
+  }
+
+  static Future<void> checkIntegrity() {
+    return _service.checkIntegrity();
+  }
+
+  static Future<void> setSensitiveClipboard(
+    String content, {
+    Duration clearAfter = const Duration(seconds: 30),
+  }) {
+    return _service.setSensitiveClipboard(content, clearAfter: clearAfter);
+  }
+
+  static Future<void> clearSensitiveClipboard() {
+    return _service.clearSensitiveClipboard();
+  }
 }

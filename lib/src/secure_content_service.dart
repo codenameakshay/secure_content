@@ -25,6 +25,40 @@ class SecureContentService {
 
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
+  Future<void> requestBiometricAuth(String reason) {
+    return _platform.requestBiometricAuth(reason);
+  }
+
+  Future<void> checkIntegrity() {
+    return _platform.checkIntegrity();
+  }
+
+  Future<void> setSensitiveClipboard(
+    String content, {
+    Duration clearAfter = const Duration(seconds: 30),
+  }) {
+    return _platform.setSensitiveClipboard(content, clearAfter: clearAfter);
+  }
+
+  Future<void> clearSensitiveClipboard() {
+    return _platform.clearSensitiveClipboard();
+  }
+
+  void emitLocalEvent(SecureContentEventType type) {
+    _eventsController.add(
+      SecureContentEvent(
+        type: type,
+        platform: 'flutter',
+        timestamp: DateTime.now(),
+        payload: <String, Object?>{
+          'type': type.name,
+          'platform': 'flutter',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      ),
+    );
+  }
+
   Future<void> updateSource({
     required Object key,
     required bool enabled,

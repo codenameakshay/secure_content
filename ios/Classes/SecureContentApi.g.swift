@@ -243,6 +243,10 @@ class SecureContentApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Senda
 protocol SecureContentHostApi {
   func configureProtection(config: ProtectionConfig) throws
   func isScreenCaptured() throws -> Bool
+  func requestBiometricAuth(reason: String) throws
+  func checkIntegrity() throws
+  func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws
+  func clearSensitiveClipboard() throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -278,6 +282,63 @@ class SecureContentHostApiSetup {
       }
     } else {
       isScreenCapturedChannel.setMessageHandler(nil)
+    }
+    let requestBiometricAuthChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.secure_content.SecureContentHostApi.requestBiometricAuth\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      requestBiometricAuthChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let reasonArg = args[0] as! String
+        do {
+          try api.requestBiometricAuth(reason: reasonArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      requestBiometricAuthChannel.setMessageHandler(nil)
+    }
+    let checkIntegrityChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.secure_content.SecureContentHostApi.checkIntegrity\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      checkIntegrityChannel.setMessageHandler { _, reply in
+        do {
+          try api.checkIntegrity()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      checkIntegrityChannel.setMessageHandler(nil)
+    }
+    let setSensitiveClipboardChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.secure_content.SecureContentHostApi.setSensitiveClipboard\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setSensitiveClipboardChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let contentArg = args[0] as! String
+        let clearAfterMsArg = args[1] as! Int64
+        do {
+          try api.setSensitiveClipboard(content: contentArg, clearAfterMs: clearAfterMsArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setSensitiveClipboardChannel.setMessageHandler(nil)
+    }
+    let clearSensitiveClipboardChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.secure_content.SecureContentHostApi.clearSensitiveClipboard\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      clearSensitiveClipboardChannel.setMessageHandler { _, reply in
+        do {
+          try api.clearSensitiveClipboard()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      clearSensitiveClipboardChannel.setMessageHandler(nil)
     }
   }
 }

@@ -1,11 +1,21 @@
 import 'pigeon/secure_content_api.g.dart' as pigeon;
 
 enum SecureContentEventType {
+  platformReady,
   screenshotCaptured,
   recordingStarted,
   recordingStopped,
   appSwitcherProtected,
   appSwitcherUnprotected,
+  biometricAuthSucceeded,
+  biometricAuthFailed,
+  biometricUnavailable,
+  integritySafe,
+  integrityRiskDetected,
+  clipboardSet,
+  clipboardCleared,
+  idleLockActivated,
+  idleLockReleased,
   unknown,
 }
 
@@ -37,6 +47,8 @@ class SecureContentEvent {
 
   static SecureContentEventType _eventTypeFromString(String type) {
     switch (type) {
+      case 'platformReady':
+        return SecureContentEventType.platformReady;
       case 'screenshotCaptured':
         return SecureContentEventType.screenshotCaptured;
       case 'recordingStarted':
@@ -47,6 +59,24 @@ class SecureContentEvent {
         return SecureContentEventType.appSwitcherProtected;
       case 'appSwitcherUnprotected':
         return SecureContentEventType.appSwitcherUnprotected;
+      case 'biometricAuthSucceeded':
+        return SecureContentEventType.biometricAuthSucceeded;
+      case 'biometricAuthFailed':
+        return SecureContentEventType.biometricAuthFailed;
+      case 'biometricUnavailable':
+        return SecureContentEventType.biometricUnavailable;
+      case 'integritySafe':
+        return SecureContentEventType.integritySafe;
+      case 'integrityRiskDetected':
+        return SecureContentEventType.integrityRiskDetected;
+      case 'clipboardSet':
+        return SecureContentEventType.clipboardSet;
+      case 'clipboardCleared':
+        return SecureContentEventType.clipboardCleared;
+      case 'idleLockActivated':
+        return SecureContentEventType.idleLockActivated;
+      case 'idleLockReleased':
+        return SecureContentEventType.idleLockReleased;
       default:
         return SecureContentEventType.unknown;
     }

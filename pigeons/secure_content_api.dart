@@ -37,6 +37,14 @@ abstract class SecureContentHostApi {
   void configureProtection(ProtectionConfig config);
 
   bool isScreenCaptured();
+
+  void requestBiometricAuth(String reason);
+
+  void checkIntegrity();
+
+  void setSensitiveClipboard(String content, int clearAfterMs);
+
+  void clearSensitiveClipboard();
 }
 
 @FlutterApi()

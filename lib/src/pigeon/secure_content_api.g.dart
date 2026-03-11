@@ -9,9 +9,9 @@ import 'package:flutter/foundation.dart' show ReadBuffer, WriteBuffer;
 import 'package:flutter/services.dart';
 
 Object? _extractReplyValueOrThrow(
-  List<Object?>? replyList,
-  String channelName, {
-  required bool isNullValid,
+    List<Object?>? replyList,
+    String channelName, {
+    required bool isNullValid,
 }) {
   if (replyList == null) {
     throw PlatformException(
@@ -33,11 +33,8 @@ Object? _extractReplyValueOrThrow(
   return replyList.firstOrNull;
 }
 
-List<Object?> wrapResponse({
-  Object? result,
-  PlatformException? error,
-  bool empty = false,
-}) {
+
+List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty = false}) {
   if (empty) {
     return <Object?>[];
   }
@@ -46,24 +43,20 @@ List<Object?> wrapResponse({
   }
   return <Object?>[error.code, error.message, error.details];
 }
-
 bool _deepEquals(Object? a, Object? b) {
   if (a is List && b is List) {
     return a.length == b.length &&
-        a.indexed.every(
-          ((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]),
-        );
+        a.indexed
+        .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
   }
   if (a is Map && b is Map) {
-    return a.length == b.length &&
-        a.entries.every(
-          (MapEntry<Object?, Object?> entry) =>
-              (b as Map<Object?, Object?>).containsKey(entry.key) &&
-              _deepEquals(entry.value, b[entry.key]),
-        );
+    return a.length == b.length && a.entries.every((MapEntry<Object?, Object?> entry) =>
+        (b as Map<Object?, Object?>).containsKey(entry.key) &&
+        _deepEquals(entry.value, b[entry.key]));
   }
   return a == b;
 }
+
 
 class ProtectionConfig {
   ProtectionConfig({
@@ -79,12 +72,15 @@ class ProtectionConfig {
   int appSwitcherColor;
 
   List<Object?> _toList() {
-    return <Object?>[enabled, protectInAppSwitcher, appSwitcherColor];
+    return <Object?>[
+      enabled,
+      protectInAppSwitcher,
+      appSwitcherColor,
+    ];
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static ProtectionConfig decode(Object result) {
     result as List<Object?>;
@@ -109,11 +105,16 @@ class ProtectionConfig {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList());
+  int get hashCode => Object.hashAll(_toList())
+;
 }
 
 class SecureEvent {
-  SecureEvent({required this.type, required this.platform, this.timestamp});
+  SecureEvent({
+    required this.type,
+    required this.platform,
+    this.timestamp,
+  });
 
   String type;
 
@@ -122,12 +123,15 @@ class SecureEvent {
   String? timestamp;
 
   List<Object?> _toList() {
-    return <Object?>[type, platform, timestamp];
+    return <Object?>[
+      type,
+      platform,
+      timestamp,
+    ];
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static SecureEvent decode(Object result) {
     result as List<Object?>;
@@ -152,8 +156,10 @@ class SecureEvent {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList());
+  int get hashCode => Object.hashAll(_toList())
+;
 }
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -162,10 +168,10 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    } else if (value is ProtectionConfig) {
+    }    else if (value is ProtectionConfig) {
       buffer.putUint8(129);
       writeValue(buffer, value.encode());
-    } else if (value is SecureEvent) {
+    }    else if (value is SecureEvent) {
       buffer.putUint8(130);
       writeValue(buffer, value.encode());
     } else {
@@ -190,13 +196,9 @@ class SecureContentHostApi {
   /// Constructor for [SecureContentHostApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  SecureContentHostApi({
-    BinaryMessenger? binaryMessenger,
-    String messageChannelSuffix = '',
-  }) : pigeonVar_binaryMessenger = binaryMessenger,
-       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
-           ? '.$messageChannelSuffix'
-           : '';
+  SecureContentHostApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
+      : pigeonVar_binaryMessenger = binaryMessenger,
+        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -204,28 +206,25 @@ class SecureContentHostApi {
   final String pigeonVar_messageChannelSuffix;
 
   Future<void> configureProtection(ProtectionConfig config) async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.secure_content.SecureContentHostApi.configureProtection$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.secure_content.SecureContentHostApi.configureProtection$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
-      <Object?>[config],
-    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[config]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
   Future<bool> isScreenCaptured() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.secure_content.SecureContentHostApi.isScreenCaptured$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.secure_content.SecureContentHostApi.isScreenCaptured$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -235,11 +234,84 @@ class SecureContentHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    )!;
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    !;
     return pigeonVar_replyValue as bool;
+  }
+
+  Future<void> requestBiometricAuth(String reason) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.secure_content.SecureContentHostApi.requestBiometricAuth$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[reason]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> checkIntegrity() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.secure_content.SecureContentHostApi.checkIntegrity$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> setSensitiveClipboard(String content, int clearAfterMs) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.secure_content.SecureContentHostApi.setSensitiveClipboard$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[content, clearAfterMs]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> clearSensitiveClipboard() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.secure_content.SecureContentHostApi.clearSensitiveClipboard$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 }
 
@@ -248,43 +320,29 @@ abstract class SecureContentFlutterApi {
 
   void onEvent(SecureEvent event);
 
-  static void setUp(
-    SecureContentFlutterApi? api, {
-    BinaryMessenger? binaryMessenger,
-    String messageChannelSuffix = '',
-  }) {
-    messageChannelSuffix = messageChannelSuffix.isNotEmpty
-        ? '.$messageChannelSuffix'
-        : '';
+  static void setUp(SecureContentFlutterApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
+    messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
     {
       final pigeonVar_channel = BasicMessageChannel<Object?>(
-        'dev.flutter.pigeon.secure_content.SecureContentFlutterApi.onEvent$messageChannelSuffix',
-        pigeonChannelCodec,
-        binaryMessenger: binaryMessenger,
-      );
+          'dev.flutter.pigeon.secure_content.SecureContentFlutterApi.onEvent$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
       } else {
         pigeonVar_channel.setMessageHandler((Object? message) async {
-          assert(
-            message != null,
-            'Argument for dev.flutter.pigeon.secure_content.SecureContentFlutterApi.onEvent was null.',
-          );
+          assert(message != null,
+          'Argument for dev.flutter.pigeon.secure_content.SecureContentFlutterApi.onEvent was null.');
           final List<Object?> args = (message as List<Object?>?)!;
           final SecureEvent? arg_event = (args[0] as SecureEvent?);
-          assert(
-            arg_event != null,
-            'Argument for dev.flutter.pigeon.secure_content.SecureContentFlutterApi.onEvent was null, expected non-null SecureEvent.',
-          );
+          assert(arg_event != null,
+              'Argument for dev.flutter.pigeon.secure_content.SecureContentFlutterApi.onEvent was null, expected non-null SecureEvent.');
           try {
             api.onEvent(arg_event!);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
-          } catch (e) {
-            return wrapResponse(
-              error: PlatformException(code: 'error', message: e.toString()),
-            );
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
           }
         });
       }

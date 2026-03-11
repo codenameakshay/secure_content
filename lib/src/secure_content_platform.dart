@@ -43,6 +43,37 @@ class SecureContentPlatform {
 
     return _hostApi.isScreenCaptured();
   }
+
+  Future<void> requestBiometricAuth(String reason) async {
+    if (!isSupportedPlatform) {
+      return;
+    }
+    await _hostApi.requestBiometricAuth(reason);
+  }
+
+  Future<void> checkIntegrity() async {
+    if (!isSupportedPlatform) {
+      return;
+    }
+    await _hostApi.checkIntegrity();
+  }
+
+  Future<void> setSensitiveClipboard(
+    String content, {
+    required Duration clearAfter,
+  }) async {
+    if (!isSupportedPlatform) {
+      return;
+    }
+    await _hostApi.setSensitiveClipboard(content, clearAfter.inMilliseconds);
+  }
+
+  Future<void> clearSensitiveClipboard() async {
+    if (!isSupportedPlatform) {
+      return;
+    }
+    await _hostApi.clearSensitiveClipboard();
+  }
 }
 
 class _FlutterApiBridge extends pigeon.SecureContentFlutterApi {

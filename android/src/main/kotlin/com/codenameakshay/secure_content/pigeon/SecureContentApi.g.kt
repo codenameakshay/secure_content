@@ -183,6 +183,10 @@ private open class SecureContentApiPigeonCodec : StandardMessageCodec() {
 interface SecureContentHostApi {
   fun configureProtection(config: ProtectionConfig)
   fun isScreenCaptured(): Boolean
+  fun requestBiometricAuth(reason: String)
+  fun checkIntegrity()
+  fun setSensitiveClipboard(content: String, clearAfterMs: Long)
+  fun clearSensitiveClipboard()
 
   companion object {
     /** The codec used by SecureContentHostApi. */
@@ -217,6 +221,75 @@ interface SecureContentHostApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.isScreenCaptured())
+            } catch (exception: Throwable) {
+              SecureContentApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.secure_content.SecureContentHostApi.requestBiometricAuth$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val reasonArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              api.requestBiometricAuth(reasonArg)
+              listOf(null)
+            } catch (exception: Throwable) {
+              SecureContentApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.secure_content.SecureContentHostApi.checkIntegrity$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.checkIntegrity()
+              listOf(null)
+            } catch (exception: Throwable) {
+              SecureContentApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.secure_content.SecureContentHostApi.setSensitiveClipboard$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val contentArg = args[0] as String
+            val clearAfterMsArg = args[1] as Long
+            val wrapped: List<Any?> = try {
+              api.setSensitiveClipboard(contentArg, clearAfterMsArg)
+              listOf(null)
+            } catch (exception: Throwable) {
+              SecureContentApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.secure_content.SecureContentHostApi.clearSensitiveClipboard$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.clearSensitiveClipboard()
+              listOf(null)
             } catch (exception: Throwable) {
               SecureContentApiPigeonUtils.wrapError(exception)
             }
