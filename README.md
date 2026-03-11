@@ -19,9 +19,33 @@
 
 ## Screenshots
 
-|                                      Android (screen recording)                                       |                   iOS (screenshot)                    |                             iOS (screen recording)                              |                               iOS (app switcher)                                |
-| :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------: | :-----------------------------------------------------------------------------: | :-----------------------------------------------------------------------------: |
-| https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4 | <img src="screenshot/screenshot_ios.PNG" width="300"> | https://github.com/user-attachments/assets/0b4e10ac-d592-4b5b-92bf-72f51b2cf570 | https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec |
+<details>
+  <summary>Android - Screen recording demo</summary>
+
+https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-9246-784def00f610.mp4
+
+</details>
+
+<details>
+  <summary>iOS - Screenshot result</summary>
+
+<img src="screenshot/screenshot_ios.PNG" width="300">
+
+</details>
+
+<details>
+  <summary>iOS - Screen recording demo</summary>
+
+https://github.com/user-attachments/assets/0b4e10ac-d592-4b5b-92bf-72f51b2cf570
+
+</details>
+
+<details>
+  <summary>iOS - App switcher demo</summary>
+
+https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
+
+</details>
 
 ## Features
 
@@ -39,7 +63,7 @@
 
 ```yaml
 dependencies:
-  secure_content: ^2.0.0-beta.1
+  secure_content: ^2.1.0-beta.1
 ```
 
 ## Quick Start
