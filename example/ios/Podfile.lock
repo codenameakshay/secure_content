@@ -1,21 +1,15 @@
 PODS:
   - Flutter (1.0.0)
-  - secure_content (2.0.0):
-    - Flutter
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
-  - secure_content (from `.symlinks/plugins/secure_content/ios`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
-  secure_content:
-    :path: ".symlinks/plugins/secure_content/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  secure_content: 911437fb81b89e73570b81a7c75571582bcf273f
 
 PODFILE CHECKSUM: ebadc59e2690dc5614ee881f688e086eb9655c8d
 
