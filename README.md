@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ```yaml
 dependencies:
-  secure_content: ^2.1.0-beta.1
+  secure_content: ^2.0.0-beta.2
 ```
 
 ## Quick Start
