@@ -27,7 +27,7 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
     NotificationCenter.default.removeObserver(self)
   }
 
-  public func configureProtection(config: ProtectionConfig) throws {
+  func configureProtection(config: ProtectionConfig) throws {
     secureEnabled = config.enabled
     protectInAppSwitcher = config.protectInAppSwitcher
     appSwitcherColor = Self.color(from: config.appSwitcherColor)
@@ -35,11 +35,11 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
     applyProtectionState()
   }
 
-  public func isScreenCaptured() throws -> Bool {
+  func isScreenCaptured() throws -> Bool {
     return UIScreen.main.isCaptured
   }
 
-  public func requestBiometricAuth(reason: String) throws {
+  func requestBiometricAuth(reason: String) throws {
     let context = LAContext()
     var error: NSError?
 
@@ -57,12 +57,12 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
     }
   }
 
-  public func checkIntegrity() throws {
+  func checkIntegrity() throws {
     let riskDetected = isJailbroken() || isDebuggerAttached() || isRunningOnSimulator()
     emit(type: riskDetected ? "integrityRiskDetected" : "integritySafe")
   }
 
-  public func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws {
+  func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws {
     UIPasteboard.general.string = content
     emit(type: "clipboardSet")
 
@@ -80,7 +80,7 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
     DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(clearAfterMs)), execute: workItem)
   }
 
-  public func clearSensitiveClipboard() throws {
+  func clearSensitiveClipboard() throws {
     UIPasteboard.general.string = ""
     clipboardClearWorkItem?.cancel()
     clipboardClearWorkItem = nil
