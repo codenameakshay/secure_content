@@ -9,7 +9,7 @@ Secure content protection primitives for Flutter with screenshot/recording aware
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'codenameakshay' => 'dev@hashstudios.dev' }
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'secure_content/Sources/secure_content/**/*'
   s.dependency       'Flutter'
   s.platform         = :ios, '13.0'
 

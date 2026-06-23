@@ -5,6 +5,7 @@
 - Breaking: raised minimums to Flutter 3.41+, Dart 3.9+, Android minSdk 23, iOS 13.
 - Replaced wrapper-style implementation with package-owned Android/iOS method/event channels.
 - Updated Android/iOS build tooling and example app baselines for latest stable Flutter.\
+- Added Swift Package Manager support for iOS (alongside CocoaPods) by converting the iOS plugin to pure Swift.
 - Added Android and iOS biometric re-auth APIs and events.
 - Added inactivity auto-lock support through `SecureContentPolicy` and scope-level lock overlays.
 - Added integrity risk checks (root/jailbreak/debugger/emulator heuristics) with soft mode events and hard-block mode behavior.

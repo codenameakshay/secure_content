@@ -8,7 +8,8 @@ import 'package:pigeon/pigeon.dart';
     kotlinOptions: KotlinOptions(
       package: 'com.codenameakshay.secure_content.pigeon',
     ),
-    swiftOut: 'ios/Classes/SecureContentApi.g.swift',
+    swiftOut:
+        'ios/secure_content/Sources/secure_content/SecureContentApi.g.swift',
     dartPackageName: 'secure_content',
   ),
 )

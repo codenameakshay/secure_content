@@ -3,7 +3,7 @@ import LocalAuthentication
 import UIKit
 import Darwin
 
-public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi {
+public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi {
   private var flutterApi: SecureContentFlutterApi?
 
   private var secureEnabled = false
@@ -15,7 +15,7 @@ public class SwiftSecureContentPlugin: NSObject, FlutterPlugin, SecureContentHos
   private var clipboardClearWorkItem: DispatchWorkItem?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let instance = SwiftSecureContentPlugin()
+    let instance = SecureContentPlugin()
     instance.flutterApi = SecureContentFlutterApi(binaryMessenger: registrar.messenger())
 
     SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
