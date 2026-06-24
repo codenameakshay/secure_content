@@ -60,40 +60,41 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildCustomLockScreen(BuildContext context, VoidCallback onUnlock) => Container(
-      color: const Color(0xFF1A237E),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.security, color: Colors.amber, size: 48),
-            const SizedBox(height: 16),
-            const Text(
-              'Session locked',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: onUnlock,
-              icon: const Icon(Icons.fingerprint),
-              label: const Text('Unlock'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 14,
+  Widget _buildCustomLockScreen(BuildContext context, VoidCallback onUnlock) =>
+      Container(
+        color: const Color(0xFF1A237E),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.security, color: Colors.amber, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Session locked',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: onUnlock,
+                icon: const Icon(Icons.fingerprint),
+                label: const Text('Unlock'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
 
   Widget _buildCustomHardBlockScreen(BuildContext context) => Container(
     color: const Color(0xFF880E4F),
