@@ -1,6 +1,6 @@
 name: secure_content
 description: Protect Flutter screens with screenshot/recording shielding, biometric re-auth, inactivity lock, integrity checks, risk watermarks, and secure clipboard controls.
-version: 2.0.0-beta.3
+version: 2.0.0-beta.4
 homepage: https://www.hashstudios.in
 repository: https://github.com/codenameakshay/secure_content
 

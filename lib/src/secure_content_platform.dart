@@ -22,6 +22,7 @@ class SecureContentPlatform {
     required bool enabled,
     required bool protectInAppSwitcher,
     required int appSwitcherColor,
+    String? appSwitcherImageName,
   }) async {
     if (!isSupportedPlatform) {
       return;
@@ -32,6 +33,7 @@ class SecureContentPlatform {
         enabled: enabled,
         protectInAppSwitcher: protectInAppSwitcher,
         appSwitcherColor: appSwitcherColor,
+        appSwitcherImageName: appSwitcherImageName,
       ),
     );
   }

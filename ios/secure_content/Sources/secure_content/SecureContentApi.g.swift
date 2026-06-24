@@ -193,6 +193,10 @@ struct ProtectionConfig: Hashable, CustomStringConvertible {
   var enabled: Bool
   var protectInAppSwitcher: Bool
   var appSwitcherColor: Int64
+  /// Optional name of an image in the host app's native asset catalog to
+  /// center on the app-switcher / privacy overlay (rendered as a template,
+  /// tinted to contrast the background). When null the overlay is a plain fill.
+  var appSwitcherImageName: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -200,11 +204,13 @@ struct ProtectionConfig: Hashable, CustomStringConvertible {
     let enabled = pigeonVar_list[0] as! Bool
     let protectInAppSwitcher = pigeonVar_list[1] as! Bool
     let appSwitcherColor = pigeonVar_list[2] as! Int64
+    let appSwitcherImageName: String? = nilOrValue(pigeonVar_list[3])
 
     return ProtectionConfig(
       enabled: enabled,
       protectInAppSwitcher: protectInAppSwitcher,
-      appSwitcherColor: appSwitcherColor
+      appSwitcherColor: appSwitcherColor,
+      appSwitcherImageName: appSwitcherImageName
     )
   }
   func toList() -> [Any?] {
@@ -212,13 +218,14 @@ struct ProtectionConfig: Hashable, CustomStringConvertible {
       enabled,
       protectInAppSwitcher,
       appSwitcherColor,
+      appSwitcherImageName,
     ]
   }
   static func == (lhs: ProtectionConfig, rhs: ProtectionConfig) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return SecureContentApiPigeonInternal.deepEquals(lhs.enabled, rhs.enabled) && SecureContentApiPigeonInternal.deepEquals(lhs.protectInAppSwitcher, rhs.protectInAppSwitcher) && SecureContentApiPigeonInternal.deepEquals(lhs.appSwitcherColor, rhs.appSwitcherColor)
+    return SecureContentApiPigeonInternal.deepEquals(lhs.enabled, rhs.enabled) && SecureContentApiPigeonInternal.deepEquals(lhs.protectInAppSwitcher, rhs.protectInAppSwitcher) && SecureContentApiPigeonInternal.deepEquals(lhs.appSwitcherColor, rhs.appSwitcherColor) && SecureContentApiPigeonInternal.deepEquals(lhs.appSwitcherImageName, rhs.appSwitcherImageName)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -226,10 +233,11 @@ struct ProtectionConfig: Hashable, CustomStringConvertible {
     SecureContentApiPigeonInternal.deepHash(value: enabled, hasher: &hasher)
     SecureContentApiPigeonInternal.deepHash(value: protectInAppSwitcher, hasher: &hasher)
     SecureContentApiPigeonInternal.deepHash(value: appSwitcherColor, hasher: &hasher)
+    SecureContentApiPigeonInternal.deepHash(value: appSwitcherImageName, hasher: &hasher)
   }
 
   public var description: String {
-    return "ProtectionConfig(enabled: \(String(describing: enabled)), protectInAppSwitcher: \(String(describing: protectInAppSwitcher)), appSwitcherColor: \(String(describing: appSwitcherColor)))"
+    return "ProtectionConfig(enabled: \(String(describing: enabled)), protectInAppSwitcher: \(String(describing: protectInAppSwitcher)), appSwitcherColor: \(String(describing: appSwitcherColor)), appSwitcherImageName: \(String(describing: appSwitcherImageName)))"
   }
 }
 

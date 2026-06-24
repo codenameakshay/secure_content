@@ -11,10 +11,8 @@ import 'secure_content_service.dart';
 ///
 /// The returned widget **must** be fully opaque and fill the available space,
 /// otherwise the protected child content may be visible underneath.
-typedef LockScreenBuilder = Widget Function(
-  BuildContext context,
-  VoidCallback onUnlock,
-);
+typedef LockScreenBuilder =
+    Widget Function(BuildContext context, VoidCallback onUnlock);
 
 /// Builder for a custom hard-block screen overlay.
 ///
@@ -32,6 +30,7 @@ class SecureContentScope extends StatefulWidget {
     this.debugShowOverlay = false,
     this.protectInAppSwitcher = true,
     this.appSwitcherColor = Colors.black,
+    this.appSwitcherImageName,
     this.policy = const SecureContentPolicy(),
     this.lockScreenBuilder,
     this.hardBlockBuilder,
@@ -44,12 +43,19 @@ class SecureContentScope extends StatefulWidget {
   final bool debugShowOverlay;
   final bool protectInAppSwitcher;
   final Color appSwitcherColor;
+
+  /// Optional image in the host app's native asset catalog (iOS) to center on
+  /// the app-switcher / privacy overlay, rendered as a white-tinted template so
+  /// the multitasking snapshot shows branding instead of a flat fill.
+  final String? appSwitcherImageName;
   final SecureContentPolicy policy;
+
   /// Custom lock screen overlay builder.
   ///
   /// When non-null, replaces the default lock screen. The returned widget
   /// **must** be fully opaque and fill the available space.
   final LockScreenBuilder? lockScreenBuilder;
+
   /// Custom hard-block screen overlay builder.
   ///
   /// When non-null, replaces the default hard-block screen. The returned
@@ -97,7 +103,8 @@ class _SecureContentScopeState extends State<SecureContentScope>
 
     if (oldWidget.enabled != widget.enabled ||
         oldWidget.protectInAppSwitcher != widget.protectInAppSwitcher ||
-        oldWidget.appSwitcherColor != widget.appSwitcherColor) {
+        oldWidget.appSwitcherColor != widget.appSwitcherColor ||
+        oldWidget.appSwitcherImageName != widget.appSwitcherImageName) {
       _bindSource();
     }
 
@@ -145,6 +152,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
       enabled: widget.enabled,
       protectInAppSwitcher: widget.protectInAppSwitcher,
       appSwitcherColor: widget.appSwitcherColor,
+      appSwitcherImageName: widget.appSwitcherImageName,
     );
   }
 
@@ -365,11 +373,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.lock_outline,
-              color: Colors.white,
-              size: 36,
-            ),
+            const Icon(Icons.lock_outline, color: Colors.white, size: 36),
             const SizedBox(height: 12),
             const Text(
               'Session locked',
@@ -399,11 +403,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.white,
-                size: 40,
-              ),
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 40),
               SizedBox(height: 12),
               Text(
                 'Access blocked for security reasons.',

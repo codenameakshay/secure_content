@@ -199,7 +199,13 @@ class FlutterError (
 data class ProtectionConfig (
   val enabled: Boolean,
   val protectInAppSwitcher: Boolean,
-  val appSwitcherColor: Long
+  val appSwitcherColor: Long,
+  /**
+   * Optional name of an image in the host app's native asset catalog to
+   * center on the app-switcher / privacy overlay (rendered as a template,
+   * tinted to contrast the background). When null the overlay is a plain fill.
+   */
+  val appSwitcherImageName: String? = null
 )
  {
   companion object {
@@ -207,7 +213,8 @@ data class ProtectionConfig (
       val enabled = pigeonVar_list[0] as Boolean
       val protectInAppSwitcher = pigeonVar_list[1] as Boolean
       val appSwitcherColor = pigeonVar_list[2] as Long
-      return ProtectionConfig(enabled, protectInAppSwitcher, appSwitcherColor)
+      val appSwitcherImageName = pigeonVar_list[3] as String?
+      return ProtectionConfig(enabled, protectInAppSwitcher, appSwitcherColor, appSwitcherImageName)
     }
   }
   fun toList(): List<Any?> {
@@ -215,6 +222,7 @@ data class ProtectionConfig (
       enabled,
       protectInAppSwitcher,
       appSwitcherColor,
+      appSwitcherImageName,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -225,7 +233,7 @@ data class ProtectionConfig (
       return true
     }
     val other = other as ProtectionConfig
-    return SecureContentApiPigeonUtils.deepEquals(this.enabled, other.enabled) && SecureContentApiPigeonUtils.deepEquals(this.protectInAppSwitcher, other.protectInAppSwitcher) && SecureContentApiPigeonUtils.deepEquals(this.appSwitcherColor, other.appSwitcherColor)
+    return SecureContentApiPigeonUtils.deepEquals(this.enabled, other.enabled) && SecureContentApiPigeonUtils.deepEquals(this.protectInAppSwitcher, other.protectInAppSwitcher) && SecureContentApiPigeonUtils.deepEquals(this.appSwitcherColor, other.appSwitcherColor) && SecureContentApiPigeonUtils.deepEquals(this.appSwitcherImageName, other.appSwitcherImageName)
   }
 
   override fun hashCode(): Int {
@@ -233,10 +241,11 @@ data class ProtectionConfig (
     result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.enabled)
     result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.protectInAppSwitcher)
     result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.appSwitcherColor)
+    result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.appSwitcherImageName)
     return result
   }
   override fun toString(): String {
-    return "ProtectionConfig(enabled=$enabled, protectInAppSwitcher=$protectInAppSwitcher, appSwitcherColor=$appSwitcherColor)"
+    return "ProtectionConfig(enabled=$enabled, protectInAppSwitcher=$protectInAppSwitcher, appSwitcherColor=$appSwitcherColor, appSwitcherImageName=$appSwitcherImageName)"
   }
 }
 

@@ -9,6 +9,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   private var secureEnabled = false
   private var protectInAppSwitcher = true
   private var appSwitcherColor: UIColor = .black
+  private var appSwitcherImageName: String?
 
   private let captureOverlayTag = 991001
   private let appSwitcherOverlayTag = 991002
@@ -31,6 +32,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     secureEnabled = config.enabled
     protectInAppSwitcher = config.protectInAppSwitcher
     appSwitcherColor = Self.color(from: config.appSwitcherColor)
+    appSwitcherImageName = config.appSwitcherImageName
 
     applyProtectionState()
   }
@@ -152,7 +154,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
 
   @objc private func handleAppWillResignActive() {
     guard secureEnabled && protectInAppSwitcher else { return }
-    showOverlay(tag: appSwitcherOverlayTag, color: appSwitcherColor)
+    showOverlay(tag: appSwitcherOverlayTag, color: appSwitcherColor, imageName: appSwitcherImageName)
     emit(type: "appSwitcherProtected")
   }
 
@@ -163,12 +165,13 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     }
   }
 
-  private func showOverlay(tag: Int, color: UIColor) {
+  private func showOverlay(tag: Int, color: UIColor, imageName: String? = nil) {
     guard let window = keyWindow() else { return }
 
     if let existing = window.viewWithTag(tag) {
       existing.backgroundColor = color
       existing.isHidden = false
+      window.bringSubviewToFront(existing)
       return
     }
 
@@ -177,6 +180,26 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     overlay.backgroundColor = color
     overlay.isUserInteractionEnabled = false
     overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+    // Brand the privacy cover: center a white-tinted template logo so the app
+    // switcher / Face ID moment reads as "secured", not "broken / black".
+    if let name = imageName, let raw = UIImage(named: name) {
+      let imageView = UIImageView(image: raw.withRenderingMode(.alwaysTemplate))
+      imageView.tintColor = .white
+      imageView.contentMode = .scaleAspectFit
+      imageView.translatesAutoresizingMaskIntoConstraints = false
+      overlay.addSubview(imageView)
+
+      let shorterSide = min(window.bounds.width, window.bounds.height)
+      let logoWidth = max(96, min(160, shorterSide * 0.28))
+      let aspect = raw.size.width > 0 ? raw.size.height / raw.size.width : 1
+      NSLayoutConstraint.activate([
+        imageView.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+        imageView.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+        imageView.widthAnchor.constraint(equalToConstant: logoWidth),
+        imageView.heightAnchor.constraint(equalTo: imageView.widthAnchor, multiplier: aspect),
+      ])
+    }
 
     window.addSubview(overlay)
   }

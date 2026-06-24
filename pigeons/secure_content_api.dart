@@ -18,11 +18,17 @@ class ProtectionConfig {
     required this.enabled,
     required this.protectInAppSwitcher,
     required this.appSwitcherColor,
+    this.appSwitcherImageName,
   });
 
   final bool enabled;
   final bool protectInAppSwitcher;
   final int appSwitcherColor;
+
+  /// Optional name of an image in the host app's native asset catalog to
+  /// center on the app-switcher / privacy overlay (rendered as a template,
+  /// tinted to contrast the background). When null the overlay is a plain fill.
+  final String? appSwitcherImageName;
 }
 
 class SecureEvent {

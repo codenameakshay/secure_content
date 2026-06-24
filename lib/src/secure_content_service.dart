@@ -22,6 +22,7 @@ class SecureContentService {
   bool _appliedEnabled = false;
   bool _appliedProtectInAppSwitcher = true;
   int _appliedAppSwitcherColor = Colors.black.toARGB32();
+  String? _appliedAppSwitcherImageName;
 
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
@@ -64,11 +65,13 @@ class SecureContentService {
     required bool enabled,
     required bool protectInAppSwitcher,
     required Color appSwitcherColor,
+    String? appSwitcherImageName,
   }) async {
     _sources[key] = _SecureSource(
       enabled: enabled,
       protectInAppSwitcher: protectInAppSwitcher,
       appSwitcherColor: appSwitcherColor,
+      appSwitcherImageName: appSwitcherImageName,
       updatedAt: DateTime.now(),
     );
 
@@ -93,27 +96,31 @@ class SecureContentService {
       (element) => element.protectInAppSwitcher,
     );
 
-    final appSwitcherColor = activeSources.isEmpty
-        ? Colors.black.toARGB32()
+    final _SecureSource? latest = activeSources.isEmpty
+        ? null
         : (activeSources..sort((a, b) => a.updatedAt.compareTo(b.updatedAt)))
-              .last
-              .appSwitcherColor
-              .toARGB32();
+              .last;
+    final appSwitcherColor =
+        latest?.appSwitcherColor.toARGB32() ?? Colors.black.toARGB32();
+    final appSwitcherImageName = latest?.appSwitcherImageName;
 
     if (enabled == _appliedEnabled &&
         protectInAppSwitcher == _appliedProtectInAppSwitcher &&
-        appSwitcherColor == _appliedAppSwitcherColor) {
+        appSwitcherColor == _appliedAppSwitcherColor &&
+        appSwitcherImageName == _appliedAppSwitcherImageName) {
       return;
     }
 
     _appliedEnabled = enabled;
     _appliedProtectInAppSwitcher = protectInAppSwitcher;
     _appliedAppSwitcherColor = appSwitcherColor;
+    _appliedAppSwitcherImageName = appSwitcherImageName;
 
     await _platform.configureProtection(
       enabled: enabled,
       protectInAppSwitcher: protectInAppSwitcher,
       appSwitcherColor: appSwitcherColor,
+      appSwitcherImageName: appSwitcherImageName,
     );
   }
 
@@ -128,11 +135,13 @@ class _SecureSource {
     required this.enabled,
     required this.protectInAppSwitcher,
     required this.appSwitcherColor,
+    required this.appSwitcherImageName,
     required this.updatedAt,
   });
 
   final bool enabled;
   final bool protectInAppSwitcher;
   final Color appSwitcherColor;
+  final String? appSwitcherImageName;
   final DateTime updatedAt;
 }

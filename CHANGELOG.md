@@ -1,3 +1,7 @@
+## 2.0.0-beta.4
+
+- Added `appSwitcherImageName` to `SecureContentScope` (and `ProtectionConfig`): center a host-app asset-catalog image, rendered as a white-tinted template, on the iOS app-switcher / privacy overlay so the multitasking snapshot and biometric-prompt moment show branding instead of a flat fill.
+
 ## 2.0.0-beta.3
 
 - Added `lockScreenBuilder` and `hardBlockBuilder` to `SecureContentScope` for custom lock screen and hard-block UI.
