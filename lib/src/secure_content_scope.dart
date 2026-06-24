@@ -7,6 +7,21 @@ import 'secure_content_event.dart';
 import 'secure_content_policy.dart';
 import 'secure_content_service.dart';
 
+/// Builder for a custom lock screen overlay.
+///
+/// The returned widget **must** be fully opaque and fill the available space,
+/// otherwise the protected child content may be visible underneath.
+typedef LockScreenBuilder = Widget Function(
+  BuildContext context,
+  VoidCallback onUnlock,
+);
+
+/// Builder for a custom hard-block screen overlay.
+///
+/// The returned widget **must** be fully opaque and fill the available space,
+/// otherwise the protected child content may be visible underneath.
+typedef HardBlockBuilder = Widget Function(BuildContext context);
+
 class SecureContentScope extends StatefulWidget {
   const SecureContentScope({
     super.key,
@@ -18,6 +33,8 @@ class SecureContentScope extends StatefulWidget {
     this.protectInAppSwitcher = true,
     this.appSwitcherColor = Colors.black,
     this.policy = const SecureContentPolicy(),
+    this.lockScreenBuilder,
+    this.hardBlockBuilder,
   });
 
   final Widget child;
@@ -28,6 +45,16 @@ class SecureContentScope extends StatefulWidget {
   final bool protectInAppSwitcher;
   final Color appSwitcherColor;
   final SecureContentPolicy policy;
+  /// Custom lock screen overlay builder.
+  ///
+  /// When non-null, replaces the default lock screen. The returned widget
+  /// **must** be fully opaque and fill the available space.
+  final LockScreenBuilder? lockScreenBuilder;
+  /// Custom hard-block screen overlay builder.
+  ///
+  /// When non-null, replaces the default hard-block screen. The returned
+  /// widget **must** be fully opaque and fill the available space.
+  final HardBlockBuilder? hardBlockBuilder;
 
   @override
   State<SecureContentScope> createState() => _SecureContentScopeState();
@@ -148,18 +175,22 @@ class _SecureContentScopeState extends State<SecureContentScope>
         _updateState(() {
           _isCaptured = true;
         });
+        break;
       case SecureContentEventType.recordingStopped:
         _updateState(() {
           _isCaptured = false;
         });
+        break;
       case SecureContentEventType.appSwitcherProtected:
         _updateState(() {
           _appSwitcherProtected = true;
         });
+        break;
       case SecureContentEventType.appSwitcherUnprotected:
         _updateState(() {
           _appSwitcherProtected = false;
         });
+        break;
       case SecureContentEventType.integrityRiskDetected:
         _updateState(() {
           _integrityRiskDetected = true;
@@ -167,6 +198,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
             _isLocked = true;
           }
         });
+        break;
       case SecureContentEventType.integritySafe:
         _updateState(() {
           _integrityRiskDetected = false;
@@ -174,14 +206,18 @@ class _SecureContentScopeState extends State<SecureContentScope>
             _isLocked = false;
           }
         });
+        break;
       case SecureContentEventType.biometricAuthSucceeded:
         _isAuthenticating = false;
         _needsBiometricAuth = false;
         _unlock();
+        break;
       case SecureContentEventType.biometricAuthFailed:
         _isAuthenticating = false;
+        break;
       case SecureContentEventType.biometricUnavailable:
         _isAuthenticating = false;
+        break;
       case SecureContentEventType.platformReady:
       case SecureContentEventType.screenshotCaptured:
       case SecureContentEventType.clipboardSet:
@@ -244,6 +280,14 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _restartIdleTimer();
   }
 
+  void _handleUnlock() {
+    if (widget.policy.requireBiometricOnResume) {
+      _lockAndRequestBiometric();
+    } else {
+      _unlock();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isHardBlocked =
@@ -291,70 +335,84 @@ class _SecureContentScopeState extends State<SecureContentScope>
             ),
           if (_isLocked && !isHardBlocked)
             Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.88),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.lock_outline,
-                        color: Colors.white,
-                        size: 36,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Session locked',
-                        style: TextStyle(color: Colors.white, fontSize: 18),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (widget.policy.requireBiometricOnResume) {
-                            _lockAndRequestBiometric();
-                          } else {
-                            _unlock();
-                          }
-                        },
-                        child: Text(
-                          widget.policy.requireBiometricOnResume
-                              ? 'Unlock with biometrics'
-                              : 'Unlock',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                child: widget.lockScreenBuilder != null
+                    ? widget.lockScreenBuilder!(context, _handleUnlock)
+                    : _buildDefaultLockScreen(),
               ),
             ),
           if (isHardBlocked)
             Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'Access blocked for security reasons.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 18),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                child: widget.hardBlockBuilder != null
+                    ? widget.hardBlockBuilder!(context)
+                    : _buildDefaultHardBlockScreen(),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultLockScreen() {
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.88),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.lock_outline,
+              color: Colors.white,
+              size: 36,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Session locked',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _handleUnlock,
+              child: Text(
+                widget.policy.requireBiometricOnResume
+                    ? 'Unlock with biometrics'
+                    : 'Unlock',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultHardBlockScreen() {
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.white,
+                size: 40,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Access blocked for security reasons.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

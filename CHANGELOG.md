@@ -1,3 +1,10 @@
+## 2.0.0-beta.3
+
+- Added `lockScreenBuilder` and `hardBlockBuilder` to `SecureContentScope` for custom lock screen and hard-block UI.
+- Migrated example Android project to built-in Kotlin (AGP 8.12 / Gradle 8.13 / Java 21).
+- Bumped Pigeon from v26 to v27.
+- Bumped compile/target compatibility to Java 17 for the plugin and Java 21 for the example.
+
 ## 2.0.0-beta.2
 
 - Added Swift Package Manager (SPM) support for iOS alongside CocoaPods by converting the iOS plugin to pure Swift.
