@@ -1,0 +1,7 @@
+# Keep large demo videos out of the published package (~12 MB).
+# They stay in git and are referenced from the README via externally-hosted
+# URLs, so the local copies aren't needed in the pub.dev archive.
+# Scoped to this directory so the root .gitignore (build/, .dart_tool/, ...)
+# still governs the rest of the package.
+*.mp4
+*.MP4

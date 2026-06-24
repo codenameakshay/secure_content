@@ -50,7 +50,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 ## Features
 
 - Screenshot prevention and recording obscuring
-- App switcher protection with configurable color
+- App switcher protection with configurable color and optional branding image (iOS)
 - Android 14+ screenshot callback support
 - Biometric/device credential re-auth hooks
 - Inactivity auto-lock for secure areas
@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ```yaml
 dependencies:
-  secure_content: ^2.0.0-beta.2
+  secure_content: ^2.0.0-beta.4
 ```
 
 ## Quick Start
@@ -74,6 +74,8 @@ import 'package:secure_content/secure_content.dart';
 
 SecureContentScope(
   enabled: true,
+  protectInAppSwitcher: true,
+  appSwitcherColor: Colors.black,
   policy: const SecureContentPolicy(
     requireBiometricOnResume: true,
     inactivityTimeout: Duration(seconds: 30),
@@ -88,6 +90,28 @@ SecureContentScope(
   child: const YourSensitiveWidget(),
 )
 ```
+
+## App Switcher Branding (iOS)
+
+When the app moves to the background, the multitasking snapshot and biometric
+re-auth moment are covered by a privacy overlay. By default this is a flat
+`appSwitcherColor` fill. Pass `appSwitcherImageName` to center one of your host
+app's native asset-catalog images on that overlay, rendered as a white-tinted
+template, so the snapshot shows your branding instead:
+
+```dart
+SecureContentScope(
+  enabled: true,
+  protectInAppSwitcher: true,
+  appSwitcherColor: Colors.black,
+  // Name of an image in the iOS app's asset catalog (Assets.xcassets).
+  appSwitcherImageName: 'AppSwitcherLogo',
+  child: const YourSensitiveWidget(),
+)
+```
+
+> Note: `appSwitcherImageName` is iOS-only. On Android the app-switcher overlay
+> uses `appSwitcherColor`; the image name is ignored.
 
 ## Global Protection
 

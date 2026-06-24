@@ -20,15 +20,14 @@ void main() {
       'setSensitiveClipboard',
       'clearSensitiveClipboard',
     ]) {
-      messenger.setMockMessageHandler(
-        '$channelPrefix.$method',
-        (ByteData? message) async {
-          if (method == 'isScreenCaptured') {
-            return codec.encodeMessage(<Object?>[false]);
-          }
-          return null;
-        },
-      );
+      messenger.setMockMessageHandler('$channelPrefix.$method', (
+        ByteData? message,
+      ) async {
+        if (method == 'isScreenCaptured') {
+          return codec.encodeMessage(<Object?>[false]);
+        }
+        return null;
+      });
     }
   });
 
@@ -68,11 +67,13 @@ void main() {
   // (a) Default UI renders when builders are null
   group('default UI', () {
     testWidgets('renders default lock screen when locked', (tester) async {
-      await tester.pumpWidget(buildScope(
-        policy: const SecureContentPolicy(
-          inactivityTimeout: Duration(milliseconds: 10),
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(
+            inactivityTimeout: Duration(milliseconds: 10),
+          ),
         ),
-      ));
+      );
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
@@ -81,24 +82,25 @@ void main() {
       expect(find.byType(ColoredBox), findsWidgets);
     });
 
-    testWidgets('renders default hard block screen when hard blocked',
-        (tester) async {
-      await tester.pumpWidget(buildScope(
-        policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
-      ));
-
-      await tester.pump();
-      await tester.pump();
-
-      SecureContentService.instance
-          .emitLocalEvent(SecureContentEventType.integrityRiskDetected);
-      await tester.pump();
-      await tester.pump();
-
-      expect(
-        find.text('Access blocked for security reasons.'),
-        findsOneWidget,
+    testWidgets('renders default hard block screen when hard blocked', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+        ),
       );
+
+      await tester.pump();
+      await tester.pump();
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.integrityRiskDetected,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Access blocked for security reasons.'), findsOneWidget);
     });
 
     testWidgets('renders child when not locked', (tester) async {
@@ -113,57 +115,65 @@ void main() {
 
   // (b) Custom builder renders when provided
   group('custom builders', () {
-    testWidgets('renders custom lock screen when lockScreenBuilder is provided',
-        (tester) async {
-      await tester.pumpWidget(buildScope(
-        policy: const SecureContentPolicy(
-          inactivityTimeout: Duration(milliseconds: 10),
-        ),
-        lockScreenBuilder: (context, onUnlock) =>
-            const Text('CUSTOM LOCK', key: Key('custom_lock')),
-      ));
+    testWidgets(
+      'renders custom lock screen when lockScreenBuilder is provided',
+      (tester) async {
+        await tester.pumpWidget(
+          buildScope(
+            policy: const SecureContentPolicy(
+              inactivityTimeout: Duration(milliseconds: 10),
+            ),
+            lockScreenBuilder: (context, onUnlock) =>
+                const Text('CUSTOM LOCK', key: Key('custom_lock')),
+          ),
+        );
 
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      expect(find.text('CUSTOM LOCK'), findsOneWidget);
-      expect(find.text('Session locked'), findsNothing);
-    });
+        expect(find.text('CUSTOM LOCK'), findsOneWidget);
+        expect(find.text('Session locked'), findsNothing);
+      },
+    );
 
     testWidgets(
-        'renders custom hard block screen when hardBlockBuilder is provided',
-        (tester) async {
-      await tester.pumpWidget(buildScope(
-        policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
-        hardBlockBuilder: (context) =>
-            const Text('CUSTOM BLOCK', key: Key('custom_block')),
-      ));
+      'renders custom hard block screen when hardBlockBuilder is provided',
+      (tester) async {
+        await tester.pumpWidget(
+          buildScope(
+            policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+            hardBlockBuilder: (context) =>
+                const Text('CUSTOM BLOCK', key: Key('custom_block')),
+          ),
+        );
 
-      await tester.pump();
-      await tester.pump();
+        await tester.pump();
+        await tester.pump();
 
-      SecureContentService.instance
-          .emitLocalEvent(SecureContentEventType.integrityRiskDetected);
-      await tester.pump();
-      await tester.pump();
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.integrityRiskDetected,
+        );
+        await tester.pump();
+        await tester.pump();
 
-      expect(find.text('CUSTOM BLOCK'), findsOneWidget);
-      expect(
-        find.text('Access blocked for security reasons.'),
-        findsNothing,
-      );
-    });
+        expect(find.text('CUSTOM BLOCK'), findsOneWidget);
+        expect(find.text('Access blocked for security reasons.'), findsNothing);
+      },
+    );
   });
 
   // (c) onUnlock actually unlocks
   group('unlock', () {
-    testWidgets('default lock screen unlocks when unlock button is pressed',
-        (tester) async {
-      await tester.pumpWidget(buildScope(
-        policy: const SecureContentPolicy(
-          inactivityTimeout: Duration(milliseconds: 10),
+    testWidgets('default lock screen unlocks when unlock button is pressed', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(
+            inactivityTimeout: Duration(milliseconds: 10),
+          ),
         ),
-      ));
+      );
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
@@ -177,18 +187,21 @@ void main() {
       expect(find.text('protected'), findsOneWidget);
     });
 
-    testWidgets('custom lock screen onUnlock callback dismisses the overlay',
-        (tester) async {
-      await tester.pumpWidget(buildScope(
-        policy: const SecureContentPolicy(
-          inactivityTimeout: Duration(milliseconds: 10),
+    testWidgets('custom lock screen onUnlock callback dismisses the overlay', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(
+            inactivityTimeout: Duration(milliseconds: 10),
+          ),
+          lockScreenBuilder: (context, onUnlock) => ElevatedButton(
+            key: const Key('custom_unlock_button'),
+            onPressed: onUnlock,
+            child: const Text('Custom Unlock'),
+          ),
         ),
-        lockScreenBuilder: (context, onUnlock) => ElevatedButton(
-          key: const Key('custom_unlock_button'),
-          onPressed: onUnlock,
-          child: const Text('Custom Unlock'),
-        ),
-      ));
+      );
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
