@@ -1,3 +1,7 @@
+## 2.0.0-beta.3
+
+- Added `lockScreenBuilder` and `hardBlockBuilder` to `SecureContentScope` for custom lock screen and hard-block UI.
+
 ## 2.0.0-beta.2
 
 - Added Swift Package Manager (SPM) support for iOS alongside CocoaPods by converting the iOS plugin to pure Swift.

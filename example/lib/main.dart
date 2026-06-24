@@ -34,6 +34,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _scopeEnabled = true;
   bool _hardBlockMode = false;
+  bool _useCustomLockScreen = false;
+  bool _useCustomHardBlock = false;
   int _counter = 0;
   String _lastEvent = 'No events yet';
 
@@ -58,9 +60,77 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Widget _buildCustomLockScreen(BuildContext context, VoidCallback onUnlock) => Container(
+      color: const Color(0xFF1A237E),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.security, color: Colors.amber, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'Session locked',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: onUnlock,
+              icon: const Icon(Icons.fingerprint),
+              label: const Text('Unlock'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+  Widget _buildCustomHardBlockScreen(BuildContext context) => Container(
+    color: const Color(0xFF880E4F),
+    child: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.gpp_bad, color: Colors.orange, size: 56),
+            const SizedBox(height: 16),
+            const Text(
+              'Access denied',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Security violation detected.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+  Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(title: const Text('Secure Content v2')),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -137,6 +207,30 @@ class _HomeScreenState extends State<HomeScreen> {
                           : 'Hard block mode: OFF',
                     ),
                   ),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _useCustomLockScreen = !_useCustomLockScreen;
+                      });
+                    },
+                    child: Text(
+                      _useCustomLockScreen
+                          ? 'Custom lock screen: ON'
+                          : 'Custom lock screen: OFF',
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _useCustomHardBlock = !_useCustomHardBlock;
+                      });
+                    },
+                    child: Text(
+                      _useCustomHardBlock
+                          ? 'Custom hard block: ON'
+                          : 'Custom hard block: OFF',
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
@@ -173,6 +267,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: Colors.black.withValues(alpha: 0.55),
                     ),
                   ),
+                  lockScreenBuilder:
+                      _useCustomLockScreen
+                          ? (context, onUnlock) => _buildCustomLockScreen(
+                            context,
+                            onUnlock,
+                          )
+                          : null,
+                  hardBlockBuilder:
+                      _useCustomHardBlock
+                          ? (context) => _buildCustomHardBlockScreen(context)
+                          : null,
                   child: Card(
                     child: Center(
                       child: Text(
@@ -195,5 +300,4 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
 }

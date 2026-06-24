@@ -7,6 +7,13 @@ import 'secure_content_event.dart';
 import 'secure_content_policy.dart';
 import 'secure_content_service.dart';
 
+typedef LockScreenBuilder = Widget Function(
+  BuildContext context,
+  VoidCallback onUnlock,
+);
+
+typedef HardBlockBuilder = Widget Function(BuildContext context);
+
 class SecureContentScope extends StatefulWidget {
   const SecureContentScope({
     super.key,
@@ -18,6 +25,8 @@ class SecureContentScope extends StatefulWidget {
     this.protectInAppSwitcher = true,
     this.appSwitcherColor = Colors.black,
     this.policy = const SecureContentPolicy(),
+    this.lockScreenBuilder,
+    this.hardBlockBuilder,
   });
 
   final Widget child;
@@ -28,6 +37,8 @@ class SecureContentScope extends StatefulWidget {
   final bool protectInAppSwitcher;
   final Color appSwitcherColor;
   final SecureContentPolicy policy;
+  final LockScreenBuilder? lockScreenBuilder;
+  final HardBlockBuilder? hardBlockBuilder;
 
   @override
   State<SecureContentScope> createState() => _SecureContentScopeState();
@@ -244,6 +255,14 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _restartIdleTimer();
   }
 
+  void _handleUnlock() {
+    if (widget.policy.requireBiometricOnResume) {
+      _lockAndRequestBiometric();
+    } else {
+      _unlock();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isHardBlocked =
@@ -291,70 +310,76 @@ class _SecureContentScopeState extends State<SecureContentScope>
             ),
           if (_isLocked && !isHardBlocked)
             Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.88),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.lock_outline,
-                        color: Colors.white,
-                        size: 36,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Session locked',
-                        style: TextStyle(color: Colors.white, fontSize: 18),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (widget.policy.requireBiometricOnResume) {
-                            _lockAndRequestBiometric();
-                          } else {
-                            _unlock();
-                          }
-                        },
-                        child: Text(
-                          widget.policy.requireBiometricOnResume
-                              ? 'Unlock with biometrics'
-                              : 'Unlock',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: widget.lockScreenBuilder != null
+                  ? widget.lockScreenBuilder!(context, _handleUnlock)
+                  : _buildDefaultLockScreen(),
             ),
           if (isHardBlocked)
             Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'Access blocked for security reasons.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 18),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              child: widget.hardBlockBuilder != null
+                  ? widget.hardBlockBuilder!(context)
+                  : _buildDefaultHardBlockScreen(),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultLockScreen() {
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.88),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.lock_outline,
+              color: Colors.white,
+              size: 36,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Session locked',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _handleUnlock,
+              child: Text(
+                widget.policy.requireBiometricOnResume
+                    ? 'Unlock with biometrics'
+                    : 'Unlock',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultHardBlockScreen() {
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.white,
+                size: 40,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Access blocked for security reasons.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
