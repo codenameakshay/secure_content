@@ -1,3 +1,10 @@
+## 2.0.0
+
+- Breaking: redesigned the package around `SecureContentScope`, typed events, and controller-driven global protection, replacing the legacy `SecureWidget`/`RouteAwareState` API.
+- Added biometric re-authentication, inactivity locking, integrity risk checks, sensitive clipboard controls, risk-state watermarks, and customizable lock and hard-block screens.
+- Added native Android and iOS implementations, including Android 14+ screenshot callbacks and iOS app-switcher privacy overlays with optional branded imagery.
+- Added Swift Package Manager support alongside CocoaPods and updated the supported toolchain baselines to Dart 3.9+, Flutter 3.41+, Android minSdk 23, and iOS 13.
+
 ## 2.0.0-beta.4
 
 - Added `appSwitcherImageName` to `SecureContentScope` (and `ProtectionConfig`): center a host-app asset-catalog image, rendered as a white-tinted template, on the iOS app-switcher / privacy overlay so the multitasking snapshot and biometric-prompt moment show branding instead of a flat fill.
