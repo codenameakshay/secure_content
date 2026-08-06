@@ -1,16 +1,23 @@
-# example
+# secure_content example
 
-A new Flutter project.
+This example demonstrates the package's v2 API, including:
 
-## Getting Started
+- Global protection toggle
+- Scoped protection with `SecureContentScope`
+- Policy-based security behavior via `SecureContentPolicy`
+- Biometric re-auth trigger
+- Integrity check trigger
+- Sensitive clipboard with auto-clear TTL
+- Hard-block mode toggle
+- Event stream updates in UI
 
-This project is a starting point for a Flutter application.
+## Run
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+fvm flutter run
+```
 
-- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
+## Notes
 
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Android screenshot callback requires Android 14+.
+- Android clipboard copy toast is system-managed and cannot be suppressed by apps.

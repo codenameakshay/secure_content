@@ -1,6 +1,6 @@
-library secure_content;
-
-export 'src/secure_class.dart';
-export 'src/android_secure_widget.dart';
-export 'src/ios_secure_widget.dart';
-export 'src/secure_widget.dart';
+export 'src/secure_content_controller.dart';
+export 'src/secure_content_event.dart';
+export 'src/secure_content_facade.dart';
+export 'src/secure_content_policy.dart';
+export 'src/secure_content_scope.dart'
+    show SecureContentScope, LockScreenBuilder, HardBlockBuilder;
