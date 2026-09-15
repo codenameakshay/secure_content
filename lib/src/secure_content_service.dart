@@ -48,10 +48,24 @@ class SecureContentService {
   /// reacting to the raw [events] stream, since that stream is shared by every
   /// [SecureContentService] consumer and a biometric outcome on it may belong
   /// to a request some other, unrelated caller made.
-  Future<SecureContentEventType> requestBiometricAuth(String reason) {
-    final inFlight = _biometricRequest;
-    if (inFlight != null) {
-      return inFlight.future;
+  Future<SecureContentEventType> requestBiometricAuth(
+    String reason, {
+    bool joinInFlight = true,
+  }) async {
+    if (!_platform.isSupportedPlatform) {
+      return SecureContentEventType.biometricUnavailable;
+    }
+
+    if (!joinInFlight) {
+      final inFlight = _biometricRequest;
+      if (inFlight != null) {
+        await inFlight.future;
+      }
+    }
+
+    final current = _biometricRequest;
+    if (current != null) {
+      return current.future;
     }
 
     final completer = Completer<SecureContentEventType>();

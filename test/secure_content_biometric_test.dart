@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secure_content/src/secure_content_event.dart';
 import 'package:secure_content/src/secure_content_platform.dart';
 import 'package:secure_content/src/secure_content_service.dart';
+import 'package:secure_content/src/pigeon/secure_content_api.g.dart' as pigeon;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -12,15 +13,16 @@ void main() {
   // the real Pigeon channel (see AUTH-01).
   const channelPrefix =
       'dev.flutter.pigeon.secure_content.SecureContentHostApi';
+  final codec = pigeon.SecureContentHostApi.pigeonChannelCodec;
 
   setUp(() {
-    SecureContentPlatform.debugIsSupportedPlatformOverride = false;
+    SecureContentPlatform.debugIsSupportedPlatformOverride = true;
 
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMessageHandler(
       '$channelPrefix.requestBiometricAuth',
-      (ByteData? message) async => null,
+      (ByteData? message) async => codec.encodeMessage(<Object?>[null]),
     );
   });
 
@@ -66,6 +68,19 @@ void main() {
       final second = service.requestBiometricAuth('reason');
       service.emitLocalEvent(SecureContentEventType.biometricUnavailable);
       expect(await second, SecureContentEventType.biometricUnavailable);
+    },
+  );
+
+  test(
+    'unsupported platforms resolve biometric requests immediately',
+    () async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = false;
+
+      final outcome = await SecureContentService.instance
+          .requestBiometricAuth('reason')
+          .timeout(const Duration(seconds: 1));
+
+      expect(outcome, SecureContentEventType.biometricUnavailable);
     },
   );
 }

@@ -29,7 +29,7 @@ void main() {
         if (method == 'isScreenCaptured') {
           return codec.encodeMessage(<Object?>[false]);
         }
-        return null;
+        return codec.encodeMessage(<Object?>[]);
       });
     }
   });
@@ -159,6 +159,41 @@ void main() {
     );
   });
 
+  group('biometric request lifecycle', () {
+    testWidgets('a stale result cannot unlock a re-enabled scope', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      const policy = SecureContentPolicy(requireBiometricOnResume: true);
+
+      await tester.pumpWidget(buildScope(policy: policy));
+      expect(find.text('Session locked'), findsOneWidget);
+
+      await tester.pumpWidget(buildScope(enabled: false, policy: policy));
+      await tester.pump();
+      expect(find.text('protected'), findsOneWidget);
+
+      await tester.pumpWidget(buildScope(policy: policy));
+      await tester.pump();
+      expect(find.text('Session locked'), findsOneWidget);
+
+      // Complete the original request. The scope must ignore it, wait for the
+      // fresh request to start, and remain locked.
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.biometricAuthSucceeded,
+      );
+      await tester.pump();
+      expect(find.text('Session locked'), findsOneWidget);
+
+      // Complete the fresh request to release this scope.
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.biometricAuthSucceeded,
+      );
+      await tester.pump();
+      expect(find.text('protected'), findsOneWidget);
+    });
+  });
+
   // (b) Custom builder renders when provided
   group('custom builders', () {
     testWidgets(
@@ -239,6 +274,8 @@ void main() {
   group('biometric unavailable', () {
     testWidgets('shows an explicit unavailable message and stays locked, then '
         'recovers once biometrics succeed on retry', (tester) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+
       await tester.pumpWidget(
         buildScope(
           policy: const SecureContentPolicy(requireBiometricOnResume: true),
@@ -325,6 +362,51 @@ void main() {
       await tester.pump();
 
       expect(find.text('Access blocked for security reasons.'), findsNothing);
+    });
+
+    testWidgets('disabling hard-block policy removes an active hard block', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+        ),
+      );
+      await tester.pump();
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.integrityRiskDetected,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Access blocked for security reasons.'), findsOneWidget);
+
+      await tester.pumpWidget(buildScope());
+      await tester.pump();
+
+      expect(find.text('Access blocked for security reasons.'), findsNothing);
+      expect(find.text('protected'), findsOneWidget);
+    });
+
+    testWidgets('re-enabling a scope reapplies biometric locking', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      const policy = SecureContentPolicy(requireBiometricOnResume: true);
+
+      await tester.pumpWidget(buildScope(enabled: false, policy: policy));
+      await tester.pump();
+      expect(find.text('protected'), findsOneWidget);
+
+      await tester.pumpWidget(buildScope(policy: policy));
+      await tester.pump();
+
+      expect(find.text('Session locked'), findsOneWidget);
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.biometricAuthSucceeded,
+      );
+      await tester.pump();
     });
   });
 
