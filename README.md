@@ -164,7 +164,7 @@ Key event types include:
 | Feature                         | iOS | Android |
 | ------------------------------- | --- | ------- |
 | Screenshot Prevention           | ❌  | ✅      |
-| Screen Recording Prevention     | ✅  | ✅      |
+| Screen Recording Obscuring      | ✅  | ✅      |
 | Screenshot Detection Callback   | ✅  | ✅ (Android 14+) |
 | Screen Recording Start Callback | ✅  | ❌      |
 | Screen Recording Stop Callback  | ✅  | ❌      |
