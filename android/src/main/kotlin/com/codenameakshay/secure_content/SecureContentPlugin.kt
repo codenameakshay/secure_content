@@ -78,18 +78,16 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         }
 
         val title = if (reason.isBlank()) "Authenticate" else reason
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
-
         // AndroidX Biometric supports API 23+, so try it first whenever the host
         // Activity is a FragmentActivity, before falling back to the API 28+
         // framework prompt below. This lets API 23-27 hosts authenticate instead
         // of being rejected purely for being below the framework's minimum.
         val fragmentActivity = currentActivity as? FragmentActivity
         if (fragmentActivity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val authenticators = androidXBiometricAuthenticators()
             val biometricManager = BiometricManager.from(fragmentActivity)
             if (biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS) {
-                requestBiometricWithAndroidX(fragmentActivity, title)
+                requestBiometricWithAndroidX(fragmentActivity, title, authenticators)
             } else {
                 emitEvent("biometricUnavailable")
             }
@@ -101,6 +99,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             return
         }
 
+        val authenticators = frameworkBiometricAuthenticators()
         val biometricManager = BiometricManager.from(currentActivity)
         if (biometricManager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
             emitEvent("biometricUnavailable")
@@ -110,16 +109,32 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         requestBiometricWithFramework(currentActivity, title)
     }
 
+    private fun androidXBiometricAuthenticators(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
+        }
+    }
+
+    private fun frameworkBiometricAuthenticators(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
+        }
+    }
+
     private fun requestBiometricWithAndroidX(
         fragmentActivity: FragmentActivity,
         title: String,
+        authenticators: Int,
     ) {
         val promptInfo = AndroidXBiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
-            .setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_WEAK or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-            )
+            .setAllowedAuthenticators(authenticators)
             .build()
 
         val biometricPrompt = AndroidXBiometricPrompt(
@@ -136,10 +151,6 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
                     emitEvent("biometricAuthFailed")
                 }
 
-                override fun onAuthenticationFailed() {
-                    super.onAuthenticationFailed()
-                    emitEvent("biometricAuthFailed")
-                }
             },
         )
         biometricPrompt.authenticate(promptInfo)
@@ -154,11 +165,6 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             override fun onAuthenticationSucceeded(result: FrameworkBiometricPrompt.AuthenticationResult?) {
                 super.onAuthenticationSucceeded(result)
                 emitEvent("biometricAuthSucceeded")
-            }
-
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                emitEvent("biometricAuthFailed")
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
@@ -243,6 +249,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun onDetachedFromActivityForConfigChanges() {
         unregisterScreenshotCallbackIfAvailable()
         activity = null
+        originalNavigationBarColor = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
@@ -254,6 +261,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun onDetachedFromActivity() {
         unregisterScreenshotCallbackIfAvailable()
         activity = null
+        originalNavigationBarColor = null
     }
 
     private fun registerScreenshotCallbackIfAvailable() {
