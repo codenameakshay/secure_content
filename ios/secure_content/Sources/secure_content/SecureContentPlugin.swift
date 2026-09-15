@@ -159,8 +159,10 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
 
   @objc private func handleAppWillResignActive() {
     guard secureEnabled && protectInAppSwitcher else { return }
-    showOverlay(tag: appSwitcherOverlayTag, color: appSwitcherColor, imageName: appSwitcherImageName)
-    emit(type: "appSwitcherProtected")
+    let installed = showOverlay(tag: appSwitcherOverlayTag, color: appSwitcherColor, imageName: appSwitcherImageName)
+    if installed {
+      emit(type: "appSwitcherProtected")
+    }
   }
 
   @objc private func handleAppDidBecomeActive() {
@@ -170,14 +172,15 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     }
   }
 
-  private func showOverlay(tag: Int, color: UIColor, imageName: String? = nil) {
-    guard let window = keyWindow() else { return }
+  @discardableResult
+  private func showOverlay(tag: Int, color: UIColor, imageName: String? = nil) -> Bool {
+    guard let window = keyWindow() else { return false }
 
     if let existing = window.viewWithTag(tag) {
       existing.backgroundColor = color
       existing.isHidden = false
       window.bringSubviewToFront(existing)
-      return
+      return true
     }
 
     let overlay = UIView(frame: window.bounds)
@@ -207,6 +210,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     }
 
     window.addSubview(overlay)
+    return true
   }
 
   private func hideOverlay(tag: Int) {
