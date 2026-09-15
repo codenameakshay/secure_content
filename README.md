@@ -1,6 +1,6 @@
 <h1 align="center">Secure Content</h1>
 
-<p align="center">Protect sensitive Flutter UI from screenshots, recording visibility, app switcher previews, and runtime risk states on Android and iOS.</p><br>
+<p align="center">Protect sensitive Flutter UI from recording visibility, app switcher previews, and runtime risk states on Android and iOS. On iOS, screenshot events are detected and reported.</p><br>
 
 <p align="center">
   <a href="https://flutter.dev">
@@ -27,7 +27,7 @@ https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-
 </details>
 
 <details>
-  <summary>iOS - Screenshot result</summary>
+  <summary>iOS - Screenshot detection result</summary>
 
 <img src="screenshot/screenshot_ios.PNG" width="300">
 
@@ -49,7 +49,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ## Features
 
-- Screenshot prevention and recording obscuring
+- Screenshot detection and recording obscuring
 - App switcher protection with configurable color and optional branding image (iOS)
 - Android 14+ screenshot callback support
 - Biometric/device credential re-auth hooks
@@ -154,7 +154,7 @@ Key event types include:
 
 | Feature                         | iOS | Android |
 | ------------------------------- | --- | ------- |
-| Screenshot Prevention           | ✅  | ✅      |
+| Screenshot Prevention           | ❌  | ✅      |
 | Screen Recording Prevention     | ✅  | ✅      |
 | Screenshot Detection Callback   | ✅  | ✅ (Android 14+) |
 | Screen Recording Start Callback | ✅  | ❌      |
