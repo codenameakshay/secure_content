@@ -216,15 +216,13 @@ class _SecureContentScopeState extends State<SecureContentScope>
         });
         break;
       case SecureContentEventType.biometricAuthSucceeded:
-        _isAuthenticating = false;
-        _needsBiometricAuth = false;
-        _unlock();
-        break;
       case SecureContentEventType.biometricAuthFailed:
-        _isAuthenticating = false;
-        break;
       case SecureContentEventType.biometricUnavailable:
-        _isAuthenticating = false;
+        // Biometric outcomes are correlated per-request through the Future
+        // returned by SecureContentService.requestBiometricAuth (see
+        // _awaitBiometricResult). This raw broadcast event may belong to a
+        // request some other SecureContentScope made, so it must not mutate
+        // this scope's lock state.
         break;
       case SecureContentEventType.platformReady:
       case SecureContentEventType.screenshotCaptured:
@@ -278,7 +276,23 @@ class _SecureContentScopeState extends State<SecureContentScope>
     }
     _isAuthenticating = true;
     _activateIdleLock();
-    unawaited(_service.requestBiometricAuth(widget.policy.biometricReason));
+    unawaited(_awaitBiometricResult(widget.policy.biometricReason));
+  }
+
+  /// Awaits the outcome of this scope's own biometric request and updates
+  /// only this scope's state from it, instead of reacting to the shared
+  /// broadcast event stream (which every SecureContentScope listens to and
+  /// which may carry another scope's request outcome).
+  Future<void> _awaitBiometricResult(String reason) async {
+    final outcome = await _service.requestBiometricAuth(reason);
+    if (!mounted) {
+      return;
+    }
+    _isAuthenticating = false;
+    if (outcome == SecureContentEventType.biometricAuthSucceeded) {
+      _needsBiometricAuth = false;
+      _unlock();
+    }
   }
 
   void _onUserInteraction() {

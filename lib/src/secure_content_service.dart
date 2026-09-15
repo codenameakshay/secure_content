@@ -24,10 +24,63 @@ class SecureContentService {
   int _appliedAppSwitcherColor = Colors.black.toARGB32();
   String? _appliedAppSwitcherImageName;
 
+  Completer<SecureContentEventType>? _biometricRequest;
+  StreamSubscription<SecureContentEvent>? _biometricResultSubscription;
+
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
-  Future<void> requestBiometricAuth(String reason) {
-    return _platform.requestBiometricAuth(reason);
+  /// Requests biometric authentication and returns the outcome as one of
+  /// [SecureContentEventType.biometricAuthSucceeded],
+  /// [SecureContentEventType.biometricAuthFailed], or
+  /// [SecureContentEventType.biometricUnavailable].
+  ///
+  /// Only one biometric prompt runs at a time: concurrent callers share the
+  /// same in-flight request and native prompt, and all resolve together from
+  /// the single correlated result. Callers must await this result instead of
+  /// reacting to the raw [events] stream, since that stream is shared by every
+  /// [SecureContentService] consumer and a biometric outcome on it may belong
+  /// to a request some other, unrelated caller made.
+  Future<SecureContentEventType> requestBiometricAuth(String reason) {
+    final inFlight = _biometricRequest;
+    if (inFlight != null) {
+      return inFlight.future;
+    }
+
+    final completer = Completer<SecureContentEventType>();
+    _biometricRequest = completer;
+    _biometricResultSubscription = _eventsController.stream.listen((event) {
+      switch (event.type) {
+        case SecureContentEventType.biometricAuthSucceeded:
+        case SecureContentEventType.biometricAuthFailed:
+        case SecureContentEventType.biometricUnavailable:
+          _completeBiometricRequest(event.type);
+          break;
+        default:
+          break;
+      }
+    });
+
+    unawaited(
+      _platform.requestBiometricAuth(reason).catchError((
+        Object _,
+        StackTrace _,
+      ) {
+        _completeBiometricRequest(SecureContentEventType.biometricAuthFailed);
+      }),
+    );
+
+    return completer.future;
+  }
+
+  void _completeBiometricRequest(SecureContentEventType outcome) {
+    final completer = _biometricRequest;
+    if (completer == null || completer.isCompleted) {
+      return;
+    }
+    _biometricRequest = null;
+    unawaited(_biometricResultSubscription?.cancel());
+    _biometricResultSubscription = null;
+    completer.complete(outcome);
   }
 
   Future<void> checkIntegrity() {
@@ -126,6 +179,7 @@ class SecureContentService {
 
   void dispose() {
     _eventSubscription?.cancel();
+    unawaited(_biometricResultSubscription?.cancel());
     _eventsController.close();
   }
 }
