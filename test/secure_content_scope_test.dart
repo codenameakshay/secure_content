@@ -291,6 +291,30 @@ void main() {
     });
   });
 
+  // LIFE-01: runtime policy/enabled changes must take effect immediately.
+  group('policy changes take effect', () {
+    testWidgets('disabling the scope clears an active hard block immediately', (
+      tester,
+    ) async {
+      const policy = SecureContentPolicy(hardBlockOnIntegrityRisk: true);
+      await tester.pumpWidget(buildScope(policy: policy));
+      await tester.pump();
+      await tester.pump();
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.integrityRiskDetected,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Access blocked for security reasons.'), findsOneWidget);
+
+      await tester.pumpWidget(buildScope(enabled: false, policy: policy));
+      await tester.pump();
+
+      expect(find.text('Access blocked for security reasons.'), findsNothing);
+    });
+  });
+
   // (c) onUnlock actually unlocks
   group('unlock', () {
     testWidgets('default lock screen unlocks when unlock button is pressed', (

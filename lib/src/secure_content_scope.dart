@@ -119,7 +119,38 @@ class _SecureContentScopeState extends State<SecureContentScope>
       _bindSource();
     }
 
-    if (oldWidget.policy.inactivityTimeout != widget.policy.inactivityTimeout) {
+    // LIFE-01: centralize policy application here so every policy field
+    // that can change at runtime actually takes effect immediately, instead
+    // of only inactivityTimeout doing so.
+    final enabledChanged = oldWidget.enabled != widget.enabled;
+
+    if (enabledChanged && !widget.enabled) {
+      // STATE-01: disabling protection must hard-block every side effect
+      // right away, not just stop new ones from starting.
+      _isAuthenticating = false;
+      _needsBiometricAuth = false;
+      _updateState(() {
+        _isLocked = false;
+        _integrityRiskDetected = false;
+        _biometricUnavailable = false;
+      });
+    }
+
+    if (!widget.policy.requireBiometricOnResume) {
+      // A policy that no longer requires biometrics on resume must not
+      // leave a stale pending requirement from before the change.
+      _needsBiometricAuth = false;
+    }
+
+    final integrityChecksJustEnabled =
+        widget.policy.enableIntegrityChecks &&
+        (enabledChanged || !oldWidget.policy.enableIntegrityChecks);
+    if (integrityChecksJustEnabled) {
+      _maybeCheckIntegrity();
+    }
+
+    if (enabledChanged ||
+        oldWidget.policy.inactivityTimeout != widget.policy.inactivityTimeout) {
       _restartIdleTimer();
     }
   }
