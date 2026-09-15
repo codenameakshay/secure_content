@@ -162,6 +162,32 @@ void main() {
     );
   });
 
+  // STATE-01: enabled:false must disable integrity checks / hard-block UI.
+  group('disabled scope', () {
+    testWidgets(
+      'does not show the hard block screen when disabled, even on integrity risk',
+      (tester) async {
+        await tester.pumpWidget(
+          buildScope(
+            enabled: false,
+            policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.integrityRiskDetected,
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('Access blocked for security reasons.'), findsNothing);
+        expect(find.text('protected'), findsOneWidget);
+      },
+    );
+  });
+
   // (c) onUnlock actually unlocks
   group('unlock', () {
     testWidgets('default lock screen unlocks when unlock button is pressed', (

@@ -123,7 +123,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
           _needsBiometricAuth) {
         _lockAndRequestBiometric();
       }
-      if (widget.policy.enableIntegrityChecks) {
+      if (widget.enabled && widget.policy.enableIntegrityChecks) {
         unawaited(_service.checkIntegrity());
       }
       _restartIdleTimer();
@@ -167,7 +167,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
   }
 
   Future<void> _primePolicy() async {
-    if (widget.policy.enableIntegrityChecks) {
+    if (widget.enabled && widget.policy.enableIntegrityChecks) {
       await _service.checkIntegrity();
     }
     if (_needsBiometricAuth) {
@@ -200,6 +200,9 @@ class _SecureContentScopeState extends State<SecureContentScope>
         });
         break;
       case SecureContentEventType.integrityRiskDetected:
+        if (!widget.enabled) {
+          break;
+        }
         _updateState(() {
           _integrityRiskDetected = true;
           if (widget.policy.hardBlockOnIntegrityRisk) {
@@ -208,6 +211,9 @@ class _SecureContentScopeState extends State<SecureContentScope>
         });
         break;
       case SecureContentEventType.integritySafe:
+        if (!widget.enabled) {
+          break;
+        }
         _updateState(() {
           _integrityRiskDetected = false;
           if (widget.policy.hardBlockOnIntegrityRisk) {
@@ -313,7 +319,9 @@ class _SecureContentScopeState extends State<SecureContentScope>
   @override
   Widget build(BuildContext context) {
     final isHardBlocked =
-        widget.policy.hardBlockOnIntegrityRisk && _integrityRiskDetected;
+        widget.enabled &&
+        widget.policy.hardBlockOnIntegrityRisk &&
+        _integrityRiskDetected;
 
     final showCaptureOverlay =
         widget.debugShowOverlay || (widget.enabled && _isCaptured);
