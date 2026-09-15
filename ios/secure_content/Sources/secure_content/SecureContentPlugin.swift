@@ -10,6 +10,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   private var protectInAppSwitcher = true
   private var appSwitcherColor: UIColor = .black
   private var appSwitcherImageName: String?
+  private var platformReadyEmitted = false
 
   private let captureOverlayTag = 991001
   private let appSwitcherOverlayTag = 991002
@@ -22,7 +23,6 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
 
     SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
     instance.setupObservers()
-    instance.emit(type: "platformReady")
   }
 
   deinit {
@@ -36,6 +36,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     appSwitcherImageName = config.appSwitcherImageName
 
     applyProtectionState()
+    emitPlatformReadyOnce()
   }
 
   func isScreenCaptured() throws -> Bool {
@@ -136,6 +137,12 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     } else {
       hideOverlay(tag: captureOverlayTag)
     }
+  }
+
+  private func emitPlatformReadyOnce() {
+    guard !platformReadyEmitted else { return }
+    platformReadyEmitted = true
+    emit(type: "platformReady")
   }
 
   @objc private func handleScreenshot() {

@@ -44,12 +44,12 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var originalNavigationBarColor: Int? = null
     private lateinit var appContext: Context
     private var lastSensitiveClipboardContent: String? = null
+    private var platformReadyEmitted: Boolean = false
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         appContext = flutterPluginBinding.applicationContext
         flutterApi = SecureContentFlutterApi(flutterPluginBinding.binaryMessenger)
         SecureContentHostApi.setUp(flutterPluginBinding.binaryMessenger, this)
-        emitEvent("platformReady")
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -64,6 +64,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         appSwitcherProtectionEnabled = config.protectInAppSwitcher
         appSwitcherColor = config.appSwitcherColor.toInt()
         applyProtection()
+        emitPlatformReadyOnce()
     }
 
     override fun isScreenCaptured(): Boolean {
@@ -347,6 +348,14 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
                 originalNavigationBarColor?.let { currentActivity.window.navigationBarColor = it }
             }
         }
+    }
+
+    private fun emitPlatformReadyOnce() {
+        if (platformReadyEmitted) {
+            return
+        }
+        platformReadyEmitted = true
+        emitEvent("platformReady")
     }
 
     private fun emitEvent(type: String) {
