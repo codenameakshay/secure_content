@@ -86,6 +86,15 @@ class SecureContentEvent {
     if (value == null || value.isEmpty) {
       return null;
     }
-    return DateTime.tryParse(value);
+    final isoDateTime = DateTime.tryParse(value);
+    if (isoDateTime != null) {
+      return isoDateTime;
+    }
+
+    final epochMilliseconds = int.tryParse(value);
+    if (epochMilliseconds == null) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(epochMilliseconds, isUtc: true);
   }
 }
