@@ -157,7 +157,12 @@ class _SecureContentScopeState extends State<SecureContentScope>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _isAppActive = state == AppLifecycleState.resumed;
+    // LIFE-02: this feeds build()'s riskyState derivation, so it must go
+    // through setState (when mounted) instead of a raw field assignment,
+    // or the watermark/risk UI can go stale until some unrelated rebuild.
+    _updateState(() {
+      _isAppActive = state == AppLifecycleState.resumed;
+    });
 
     if (state == AppLifecycleState.resumed) {
       if (widget.policy.requireBiometricOnResume &&

@@ -315,6 +315,36 @@ void main() {
     });
   });
 
+  // LIFE-02: lifecycle-derived UI state must update through setState.
+  group('lifecycle-driven risk state', () {
+    testWidgets('app becoming inactive shows the risk watermark immediately', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildScope());
+      await tester.pump();
+      await tester.pump();
+
+      bool hasWatermark() => find
+          .byWidgetPredicate(
+            (widget) => widget.runtimeType.toString() == '_RiskWatermarkLayer',
+          )
+          .evaluate()
+          .isNotEmpty;
+
+      expect(hasWatermark(), isFalse);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+
+      expect(hasWatermark(), isTrue);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      expect(hasWatermark(), isFalse);
+    });
+  });
+
   // (c) onUnlock actually unlocks
   group('unlock', () {
     testWidgets('default lock screen unlocks when unlock button is pressed', (
