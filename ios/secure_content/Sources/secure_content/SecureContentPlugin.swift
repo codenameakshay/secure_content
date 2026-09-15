@@ -172,15 +172,28 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     }
   }
 
+  // Installs (or removes) the privacy overlay on every window of every
+  // connected scene, not just the key window, so multi-window/multi-scene
+  // apps (iPad Split View, Stage Manager, multiple UIWindowScenes) stay
+  // covered. On a single-scene app this is exactly the same window set as
+  // before.
   @discardableResult
   private func showOverlay(tag: Int, color: UIColor, imageName: String? = nil) -> Bool {
-    guard let window = keyWindow() else { return false }
+    let windows = allWindows()
+    guard !windows.isEmpty else { return false }
 
+    for window in windows {
+      installOverlay(in: window, tag: tag, color: color, imageName: imageName)
+    }
+    return true
+  }
+
+  private func installOverlay(in window: UIWindow, tag: Int, color: UIColor, imageName: String?) {
     if let existing = window.viewWithTag(tag) {
       existing.backgroundColor = color
       existing.isHidden = false
       window.bringSubviewToFront(existing)
-      return true
+      return
     }
 
     let overlay = UIView(frame: window.bounds)
@@ -210,23 +223,22 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     }
 
     window.addSubview(overlay)
-    return true
   }
 
   private func hideOverlay(tag: Int) {
-    guard let window = keyWindow() else { return }
-    window.viewWithTag(tag)?.removeFromSuperview()
+    for window in allWindows() {
+      window.viewWithTag(tag)?.removeFromSuperview()
+    }
   }
 
-  private func keyWindow() -> UIWindow? {
+  private func allWindows() -> [UIWindow] {
     if #available(iOS 13.0, *) {
       return UIApplication.shared.connectedScenes
         .compactMap { $0 as? UIWindowScene }
         .flatMap { $0.windows }
-        .first(where: { $0.isKeyWindow })
     }
 
-    return UIApplication.shared.windows.first(where: { $0.isKeyWindow })
+    return UIApplication.shared.windows
   }
 
   private func emit(type: String) {
