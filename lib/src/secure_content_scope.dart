@@ -468,7 +468,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
 
   Widget _buildDefaultLockScreen() {
     return ColoredBox(
-      color: Colors.black.withValues(alpha: 0.88),
+      color: Colors.black,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

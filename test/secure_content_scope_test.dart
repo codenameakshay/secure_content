@@ -89,6 +89,12 @@ void main() {
 
       expect(find.text('Session locked'), findsOneWidget);
       expect(find.byType(ColoredBox), findsWidgets);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is ColoredBox && widget.color == Colors.black,
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('renders default hard block screen when hard blocked', (
