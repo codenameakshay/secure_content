@@ -149,9 +149,17 @@ class SecureContentService {
       (element) => element.protectInAppSwitcher,
     );
 
-    final _SecureSource? latest = activeSources.isEmpty
+    // Color/image selection must only consider sources that actually
+    // requested app-switcher protection (CFG-01); a source that opted out of
+    // it should never dictate the overlay's appearance just because it was
+    // updated more recently than a source that did opt in.
+    final appSwitcherSources = activeSources
+        .where((element) => element.protectInAppSwitcher)
+        .toList();
+    final _SecureSource? latest = appSwitcherSources.isEmpty
         ? null
-        : (activeSources..sort((a, b) => a.updatedAt.compareTo(b.updatedAt)))
+        : (appSwitcherSources
+                ..sort((a, b) => a.updatedAt.compareTo(b.updatedAt)))
               .last;
     final appSwitcherColor =
         latest?.appSwitcherColor.toARGB32() ?? Colors.black.toARGB32();
