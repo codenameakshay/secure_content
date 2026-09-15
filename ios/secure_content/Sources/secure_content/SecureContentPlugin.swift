@@ -14,6 +14,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   private let captureOverlayTag = 991001
   private let appSwitcherOverlayTag = 991002
   private var clipboardClearWorkItem: DispatchWorkItem?
+  private var lastSensitiveClipboardContent: String?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = SecureContentPlugin()
@@ -66,6 +67,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
 
   func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws {
     UIPasteboard.general.string = content
+    lastSensitiveClipboardContent = content
     emit(type: "clipboardSet")
 
     clipboardClearWorkItem?.cancel()
@@ -83,7 +85,10 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   }
 
   func clearSensitiveClipboard() throws {
-    UIPasteboard.general.string = ""
+    if let expected = lastSensitiveClipboardContent, UIPasteboard.general.string == expected {
+      UIPasteboard.general.string = ""
+    }
+    lastSensitiveClipboardContent = nil
     clipboardClearWorkItem?.cancel()
     clipboardClearWorkItem = nil
     emit(type: "clipboardCleared")

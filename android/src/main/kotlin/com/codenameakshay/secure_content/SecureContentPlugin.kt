@@ -43,9 +43,12 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var secureEnabled: Boolean = false
     private var appSwitcherProtectionEnabled: Boolean = true
     private var appSwitcherColor: Int = Color.BLACK
+    private lateinit var appContext: Context
+    private var lastSensitiveClipboardContent: String? = null
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         binding = flutterPluginBinding
+        appContext = flutterPluginBinding.applicationContext
         flutterApi = SecureContentFlutterApi(binding.binaryMessenger)
         SecureContentHostApi.setUp(binding.binaryMessenger, this)
         emitEvent("platformReady")
@@ -183,8 +186,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     }
 
     override fun setSensitiveClipboard(content: String, clearAfterMs: Long) {
-        val currentActivity = activity ?: return
-        val clipboardManager = currentActivity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipboardManager = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clipData = ClipData.newPlainText("secure_content", content)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             val extras = PersistableBundle()
@@ -192,6 +194,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             clipData.description.extras = extras
         }
         clipboardManager.setPrimaryClip(clipData)
+        lastSensitiveClipboardContent = content
         emitEvent("clipboardSet")
 
         clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
@@ -205,12 +208,21 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     }
 
     override fun clearSensitiveClipboard() {
-        val currentActivity = activity ?: return
-        val clipboardManager = currentActivity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboardManager.setPrimaryClip(ClipData.newPlainText("secure_content", ""))
+        val clipboardManager = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val expected = lastSensitiveClipboardContent
+        if (expected != null && currentClipboardText(clipboardManager) == expected) {
+            clipboardManager.setPrimaryClip(ClipData.newPlainText("secure_content", ""))
+        }
+        lastSensitiveClipboardContent = null
         clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
         clipboardClearRunnable = null
         emitEvent("clipboardCleared")
+    }
+
+    private fun currentClipboardText(clipboardManager: ClipboardManager): String? {
+        val clip = clipboardManager.primaryClip ?: return null
+        if (clip.itemCount == 0) return null
+        return clip.getItemAt(0).coerceToText(appContext)?.toString()
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
