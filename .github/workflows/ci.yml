@@ -28,6 +28,8 @@ jobs:
       - run: fvm flutter pub get
         working-directory: example
       - run: make check
+      - run: ./gradlew :secure_content:testDebugUnitTest
+        working-directory: example/android
       - run: fvm flutter build apk --debug
         working-directory: example
 
