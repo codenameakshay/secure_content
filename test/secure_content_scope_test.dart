@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secure_content/secure_content.dart';
+import 'package:secure_content/src/secure_content_platform.dart';
 import 'package:secure_content/src/secure_content_service.dart';
 
 void main() {
@@ -9,7 +10,9 @@ void main() {
       'dev.flutter.pigeon.secure_content.SecureContentHostApi';
   final codec = StandardMessageCodec();
 
-  setUpAll(() {
+  setUp(() {
+    SecureContentPlatform.debugIsSupportedPlatformOverride = false;
+
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     for (final method in [
@@ -29,6 +32,10 @@ void main() {
         return null;
       });
     }
+  });
+
+  tearDown(() {
+    SecureContentPlatform.debugIsSupportedPlatformOverride = null;
   });
 
   tearDownAll(() {

@@ -1,8 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secure_content/secure_content.dart';
+import 'package:secure_content/src/secure_content_platform.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SecureContentPlatform.debugIsSupportedPlatformOverride = false;
+  });
+
+  tearDown(() {
+    SecureContentPlatform.debugIsSupportedPlatformOverride = null;
+  });
 
   // CTRL-01: dispose must mark the controller disposed, set enabled false,
   // and make later calls no-ops.

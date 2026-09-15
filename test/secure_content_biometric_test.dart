@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secure_content/src/secure_content_event.dart';
+import 'package:secure_content/src/secure_content_platform.dart';
 import 'package:secure_content/src/secure_content_service.dart';
 
 void main() {
@@ -12,13 +13,19 @@ void main() {
   const channelPrefix =
       'dev.flutter.pigeon.secure_content.SecureContentHostApi';
 
-  setUpAll(() {
+  setUp(() {
+    SecureContentPlatform.debugIsSupportedPlatformOverride = false;
+
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMessageHandler(
       '$channelPrefix.requestBiometricAuth',
       (ByteData? message) async => null,
     );
+  });
+
+  tearDown(() {
+    SecureContentPlatform.debugIsSupportedPlatformOverride = null;
   });
 
   tearDownAll(() {
