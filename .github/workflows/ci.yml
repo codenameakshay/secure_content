@@ -30,6 +30,8 @@ jobs:
       - run: make check
       - run: fvm flutter build apk --debug
         working-directory: example
+      - run: ./gradlew :secure_content:testDebugUnitTest
+        working-directory: example/android
 
   ios:
     runs-on: macos-14

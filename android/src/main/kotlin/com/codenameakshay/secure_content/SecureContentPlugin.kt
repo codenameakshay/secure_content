@@ -326,17 +326,15 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         return rootPaths.any { File(it).exists() }
     }
 
-    private fun isEmulator(): Boolean {
-        return Build.FINGERPRINT.startsWith("generic") ||
-            Build.FINGERPRINT.lowercase().contains("vbox") ||
-            Build.FINGERPRINT.lowercase().contains("test-keys") ||
-            Build.MODEL.contains("google_sdk") ||
-            Build.MODEL.contains("Emulator") ||
-            Build.MODEL.contains("Android SDK built for x86") ||
-            Build.MANUFACTURER.contains("Genymotion") ||
-            Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic") ||
-            "google_sdk" == Build.PRODUCT
-    }
+    private fun isEmulator(): Boolean = isEmulatorBuild(
+        fingerprint = Build.FINGERPRINT,
+        model = Build.MODEL,
+        manufacturer = Build.MANUFACTURER,
+        brand = Build.BRAND,
+        device = Build.DEVICE,
+        product = Build.PRODUCT,
+        hardware = Build.HARDWARE,
+    )
 
     private fun applyProtection() {
         val currentActivity = activity ?: return
@@ -379,4 +377,37 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
         flutterApi?.onEvent(event) { _ -> }
     }
+}
+
+internal fun isEmulatorBuild(
+    fingerprint: String,
+    model: String,
+    manufacturer: String,
+    brand: String,
+    device: String,
+    product: String,
+    hardware: String,
+): Boolean {
+    val normalizedFingerprint = fingerprint.lowercase()
+    val normalizedModel = model.lowercase()
+    val normalizedManufacturer = manufacturer.lowercase()
+    val normalizedBrand = brand.lowercase()
+    val normalizedDevice = device.lowercase()
+    val normalizedProduct = product.lowercase()
+    val normalizedHardware = hardware.lowercase()
+
+    return normalizedFingerprint.startsWith("generic") ||
+        normalizedFingerprint.contains("emulator") ||
+        normalizedFingerprint.contains("vbox") ||
+        normalizedFingerprint.contains("test-keys") ||
+        normalizedModel.contains("google_sdk") ||
+        normalizedModel.contains("emulator") ||
+        normalizedModel.contains("android sdk built for") ||
+        normalizedManufacturer.contains("genymotion") ||
+        normalizedBrand.startsWith("generic") && normalizedDevice.startsWith("generic") ||
+        normalizedProduct.contains("google_sdk") ||
+        normalizedProduct.contains("sdk_gphone") ||
+        normalizedProduct.contains("emulator") ||
+        normalizedHardware.contains("goldfish") ||
+        normalizedHardware.contains("ranchu")
 }
