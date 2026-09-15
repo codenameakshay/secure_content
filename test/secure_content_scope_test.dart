@@ -52,6 +52,7 @@ void main() {
     SecureContentPolicy? policy,
     LockScreenBuilder? lockScreenBuilder,
     HardBlockBuilder? hardBlockBuilder,
+    ValueChanged<SecureContentEvent>? onEvent,
   }) {
     return MaterialApp(
       home: SecureContentScope(
@@ -59,6 +60,7 @@ void main() {
         policy: policy ?? const SecureContentPolicy(),
         lockScreenBuilder: lockScreenBuilder,
         hardBlockBuilder: hardBlockBuilder,
+        onEvent: onEvent,
         child: child ?? const Text('protected'),
       ),
     );
@@ -253,6 +255,39 @@ void main() {
 
       expect(find.text('protected'), findsOneWidget);
       expect(find.text('Biometric authentication unavailable'), findsNothing);
+    });
+  });
+
+  // EVENT-01: a throwing onEvent callback must not block internal handling.
+  group('onEvent error isolation', () {
+    testWidgets('internal event handling still runs when onEvent throws', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildScope(
+          onEvent: (event) {
+            if (event.type == SecureContentEventType.recordingStarted) {
+              throw StateError('boom from consumer onEvent');
+            }
+          },
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.recordingStarted,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // The callback's exception is reported through FlutterError, not
+      // swallowed silently and not left to crash the stream listener.
+      expect(tester.takeException(), isA<StateError>());
+
+      // Internal state (the capture overlay) must still have updated
+      // despite the callback throwing.
+      expect(find.byType(DecoratedBox), findsWidgets);
     });
   });
 

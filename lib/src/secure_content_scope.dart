@@ -182,7 +182,24 @@ class _SecureContentScopeState extends State<SecureContentScope>
   }
 
   void _handleEvent(SecureContentEvent event) {
-    widget.onEvent?.call(event);
+    // A throwing consumer callback must not prevent this scope from
+    // processing the event internally (EVENT-01): report the error through
+    // the normal Flutter error pipeline instead of letting it propagate out
+    // of this stream listener and skip the switch below.
+    try {
+      widget.onEvent?.call(event);
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'secure_content',
+          context: ErrorDescription(
+            'while handling a SecureContentScope onEvent callback',
+          ),
+        ),
+      );
+    }
 
     switch (event.type) {
       case SecureContentEventType.recordingStarted:
