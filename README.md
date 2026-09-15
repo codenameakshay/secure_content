@@ -12,7 +12,7 @@
       alt="Pub Package" />
   </a>
   <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/github/license/aagarwal1012/animated-text-kit?color=red"
+    <img src="https://img.shields.io/github/license/codenameakshay/secure_content?color=red"
       alt="License: MIT" />
   </a>
 </p><br>
@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ```yaml
 dependencies:
-  secure_content: ^2.0.0-beta.4
+  secure_content: ^2.0.0
 ```
 
 ## Quick Start
