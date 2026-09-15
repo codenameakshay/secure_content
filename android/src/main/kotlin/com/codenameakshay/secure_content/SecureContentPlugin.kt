@@ -32,8 +32,6 @@ import java.io.File
 /** SecureContentPlugin */
 class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
-    private lateinit var binding: FlutterPlugin.FlutterPluginBinding
-
     private var activity: Activity? = null
     private var flutterApi: SecureContentFlutterApi? = null
     private var screenshotCallback: Activity.ScreenCaptureCallback? = null
@@ -48,10 +46,9 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var lastSensitiveClipboardContent: String? = null
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        binding = flutterPluginBinding
         appContext = flutterPluginBinding.applicationContext
-        flutterApi = SecureContentFlutterApi(binding.binaryMessenger)
-        SecureContentHostApi.setUp(binding.binaryMessenger, this)
+        flutterApi = SecureContentFlutterApi(flutterPluginBinding.binaryMessenger)
+        SecureContentHostApi.setUp(flutterPluginBinding.binaryMessenger, this)
         emitEvent("platformReady")
     }
 
@@ -341,15 +338,13 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
                 currentActivity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                if (appSwitcherProtectionEnabled) {
-                    if (originalNavigationBarColor == null) {
-                        originalNavigationBarColor = currentActivity.window.navigationBarColor
-                    }
-                    currentActivity.window.navigationBarColor = appSwitcherColor
-                } else {
-                    originalNavigationBarColor?.let { currentActivity.window.navigationBarColor = it }
+            if (appSwitcherProtectionEnabled) {
+                if (originalNavigationBarColor == null) {
+                    originalNavigationBarColor = currentActivity.window.navigationBarColor
                 }
+                currentActivity.window.navigationBarColor = appSwitcherColor
+            } else {
+                originalNavigationBarColor?.let { currentActivity.window.navigationBarColor = it }
             }
         }
     }
