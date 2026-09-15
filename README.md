@@ -91,6 +91,13 @@ SecureContentScope(
 )
 ```
 
+## Scope and Native Protection
+
+`SecureContentScope` scopes the Flutter overlay, lock screen, and risk
+watermark to its `child`. When the scope is enabled, it also enables native
+capture protection for the current app window. Native protection is not
+limited to the scope's `child`.
+
 ## App Switcher Branding (iOS)
 
 On iOS, when the app moves to the background, the multitasking snapshot and
