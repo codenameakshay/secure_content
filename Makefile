@@ -51,6 +51,10 @@ analyze: ## Run static analysis
 test: ## Run tests (no-op if no test/ dir)
 	@if [ -d test ]; then $(FLUTTER) test; else echo "No test/ directory — skipping."; fi
 
+.PHONY: example-test
+example-test: ## Run example app tests
+	cd $(EXAMPLE) && $(FLUTTER) test
+
 .PHONY: pigeon
 pigeon: ## Regenerate pigeon platform-channel code
 	$(DART) run pigeon --input $(PIGEON)
@@ -66,4 +70,4 @@ clean: ## Clean build artifacts (plugin + example)
 	cd $(EXAMPLE) && $(FLUTTER) clean
 
 .PHONY: check
-check: format-check analyze test ## Run format-check, analyze, and tests
+check: format-check analyze test example-test ## Run all Dart checks
