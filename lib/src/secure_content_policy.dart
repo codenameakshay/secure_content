@@ -10,7 +10,6 @@ class SecureContentPolicy {
     this.enableRiskWatermark = true,
     this.watermarkText = 'Sensitive',
     this.watermarkStyle,
-    this.clipboardClearAfter = const Duration(seconds: 30),
   });
 
   final bool requireBiometricOnResume;
@@ -21,5 +20,4 @@ class SecureContentPolicy {
   final bool enableRiskWatermark;
   final String watermarkText;
   final TextStyle? watermarkStyle;
-  final Duration clipboardClearAfter;
 }
