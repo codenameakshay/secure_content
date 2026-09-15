@@ -1,6 +1,6 @@
 <h1 align="center">Secure Content</h1>
 
-<p align="center">Protect sensitive Flutter UI from screenshots, recording visibility, app switcher previews, and runtime risk states on Android and iOS.</p><br>
+<p align="center">Protect sensitive Flutter UI from recording visibility, app switcher previews, and runtime risk states on Android and iOS. On iOS, screenshot events are detected and reported.</p><br>
 
 <p align="center">
   <a href="https://flutter.dev">
@@ -12,7 +12,7 @@
       alt="Pub Package" />
   </a>
   <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/github/license/aagarwal1012/animated-text-kit?color=red"
+    <img src="https://img.shields.io/github/license/codenameakshay/secure_content?color=red"
       alt="License: MIT" />
   </a>
 </p><br>
@@ -27,7 +27,7 @@ https://user-images.githubusercontent.com/60510869/154502746-830d9198-8f11-46ba-
 </details>
 
 <details>
-  <summary>iOS - Screenshot result</summary>
+  <summary>iOS - Screenshot detection result</summary>
 
 <img src="screenshot/screenshot_ios.PNG" width="300">
 
@@ -49,7 +49,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ## Features
 
-- Screenshot prevention and recording obscuring
+- Screenshot detection and recording obscuring
 - App switcher protection with configurable color and optional branding image (iOS)
 - Android 14+ screenshot callback support
 - Biometric/device credential re-auth hooks
@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ```yaml
 dependencies:
-  secure_content: ^2.0.0-beta.4
+  secure_content: ^2.0.0
 ```
 
 ## Quick Start
@@ -91,13 +91,20 @@ SecureContentScope(
 )
 ```
 
+## Scope and Native Protection
+
+`SecureContentScope` scopes the Flutter overlay, lock screen, and risk
+watermark to its `child`. When the scope is enabled, it also enables native
+capture protection for the current app window. Native protection is not
+limited to the scope's `child`.
+
 ## App Switcher Branding (iOS)
 
-When the app moves to the background, the multitasking snapshot and biometric
-re-auth moment are covered by a privacy overlay. By default this is a flat
-`appSwitcherColor` fill. Pass `appSwitcherImageName` to center one of your host
-app's native asset-catalog images on that overlay, rendered as a white-tinted
-template, so the snapshot shows your branding instead:
+On iOS, when the app moves to the background, the multitasking snapshot and
+biometric re-auth moment are covered by a privacy overlay. By default this is
+a flat `appSwitcherColor` fill. Pass `appSwitcherImageName` to center one of
+your host app's native asset-catalog images on that overlay, rendered as a
+white-tinted template:
 
 ```dart
 SecureContentScope(
@@ -110,8 +117,10 @@ SecureContentScope(
 )
 ```
 
-> Note: `appSwitcherImageName` is iOS-only. On Android the app-switcher overlay
-> uses `appSwitcherColor`; the image name is ignored.
+> Note: `appSwitcherImageName` is iOS-only. Android uses `FLAG_SECURE` for
+> capture and app-switcher protection. When `protectInAppSwitcher` is true,
+> Android also sets the navigation-bar color to `appSwitcherColor`. Android
+> does not add a branded app-switcher overlay, and it ignores the image name.
 
 ## Global Protection
 
@@ -154,8 +163,8 @@ Key event types include:
 
 | Feature                         | iOS | Android |
 | ------------------------------- | --- | ------- |
-| Screenshot Prevention           | ✅  | ✅      |
-| Screen Recording Prevention     | ✅  | ✅      |
+| Screenshot Prevention           | ❌  | ✅      |
+| Screen Recording Obscuring      | ✅  | ✅      |
 | Screenshot Detection Callback   | ✅  | ✅ (Android 14+) |
 | Screen Recording Start Callback | ✅  | ❌      |
 | Screen Recording Stop Callback  | ✅  | ❌      |
@@ -172,8 +181,13 @@ Key event types include:
 ## Notes
 
 - Android screenshot callback requires Android 14+.
+- Visual capture protection does not mute audio in a screen recording. Mute
+  audio separately in the recording or media layer.
 - Android system clipboard "Copied to clipboard" toast is controlled by the OS and cannot be disabled by apps.
 - Integrity checks are heuristic signals, not a guaranteed anti-tamper boundary.
+- The iOS example keeps CocoaPods integration. Flutter 3.44.3 builds with a
+  warning that asks you to remove the CocoaPods integration after all plugins
+  use Swift Package Manager. The warning does not block the current build.
 
 ## Example
 

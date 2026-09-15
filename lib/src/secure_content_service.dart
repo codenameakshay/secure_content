@@ -24,10 +24,75 @@ class SecureContentService {
   int _appliedAppSwitcherColor = Colors.black.toARGB32();
   String? _appliedAppSwitcherImageName;
 
+  // Serializes _sync() calls so overlapping updateSource/removeSource calls
+  // apply in order against a consistent view of _sources, instead of racing
+  // to read/write the applied-config cache concurrently (SYNC-01). This
+  // continuation Future always resolves (errors are swallowed here so the
+  // queue keeps moving); the Future returned to each _sync() caller is
+  // separate and still carries that call's own failure.
+  Future<void> _syncQueue = Future<void>.value();
+
+  Completer<SecureContentEventType>? _biometricRequest;
+  StreamSubscription<SecureContentEvent>? _biometricResultSubscription;
+
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
-  Future<void> requestBiometricAuth(String reason) {
-    return _platform.requestBiometricAuth(reason);
+  /// Requests biometric authentication and returns the outcome as one of
+  /// [SecureContentEventType.biometricAuthSucceeded],
+  /// [SecureContentEventType.biometricAuthFailed], or
+  /// [SecureContentEventType.biometricUnavailable].
+  ///
+  /// Only one biometric prompt runs at a time: concurrent callers share the
+  /// same in-flight request and native prompt, and all resolve together from
+  /// the single correlated result. Callers must await this result instead of
+  /// reacting to the raw [events] stream, since that stream is shared by every
+  /// [SecureContentService] consumer and a biometric outcome on it may belong
+  /// to a request some other, unrelated caller made.
+  Future<SecureContentEventType> requestBiometricAuth(String reason) async {
+    if (!_platform.isSupportedPlatform) {
+      return SecureContentEventType.biometricUnavailable;
+    }
+
+    final current = _biometricRequest;
+    if (current != null) {
+      return current.future;
+    }
+
+    final completer = Completer<SecureContentEventType>();
+    _biometricRequest = completer;
+    _biometricResultSubscription = _eventsController.stream.listen((event) {
+      switch (event.type) {
+        case SecureContentEventType.biometricAuthSucceeded:
+        case SecureContentEventType.biometricAuthFailed:
+        case SecureContentEventType.biometricUnavailable:
+          _completeBiometricRequest(event.type);
+          break;
+        default:
+          break;
+      }
+    });
+
+    unawaited(
+      _platform.requestBiometricAuth(reason).catchError((
+        Object _,
+        StackTrace _,
+      ) {
+        _completeBiometricRequest(SecureContentEventType.biometricAuthFailed);
+      }),
+    );
+
+    return completer.future;
+  }
+
+  void _completeBiometricRequest(SecureContentEventType outcome) {
+    final completer = _biometricRequest;
+    if (completer == null || completer.isCompleted) {
+      return;
+    }
+    _biometricRequest = null;
+    unawaited(_biometricResultSubscription?.cancel());
+    _biometricResultSubscription = null;
+    completer.complete(outcome);
   }
 
   Future<void> checkIntegrity() {
@@ -85,7 +150,13 @@ class SecureContentService {
 
   Future<bool> isScreenCaptured() => _platform.isScreenCaptured();
 
-  Future<void> _sync() async {
+  Future<void> _sync() {
+    final result = _syncQueue.then((_) => _syncOnce());
+    _syncQueue = result.catchError((Object _, StackTrace _) {});
+    return result;
+  }
+
+  Future<void> _syncOnce() async {
     final activeSources = _sources.values
         .where((element) => element.enabled)
         .toList();
@@ -96,9 +167,17 @@ class SecureContentService {
       (element) => element.protectInAppSwitcher,
     );
 
-    final _SecureSource? latest = activeSources.isEmpty
+    // Color/image selection must only consider sources that actually
+    // requested app-switcher protection (CFG-01); a source that opted out of
+    // it should never dictate the overlay's appearance just because it was
+    // updated more recently than a source that did opt in.
+    final appSwitcherSources = activeSources
+        .where((element) => element.protectInAppSwitcher)
+        .toList();
+    final _SecureSource? latest = appSwitcherSources.isEmpty
         ? null
-        : (activeSources..sort((a, b) => a.updatedAt.compareTo(b.updatedAt)))
+        : (appSwitcherSources
+                ..sort((a, b) => a.updatedAt.compareTo(b.updatedAt)))
               .last;
     final appSwitcherColor =
         latest?.appSwitcherColor.toARGB32() ?? Colors.black.toARGB32();
@@ -111,21 +190,26 @@ class SecureContentService {
       return;
     }
 
-    _appliedEnabled = enabled;
-    _appliedProtectInAppSwitcher = protectInAppSwitcher;
-    _appliedAppSwitcherColor = appSwitcherColor;
-    _appliedAppSwitcherImageName = appSwitcherImageName;
-
+    // Only commit the applied-config cache once the platform call actually
+    // succeeds (SYNC-01). If configureProtection throws, the cache stays at
+    // its last known-good value so the next _sync() call sees a diff again
+    // and retries, instead of silently believing a failed call succeeded.
     await _platform.configureProtection(
       enabled: enabled,
       protectInAppSwitcher: protectInAppSwitcher,
       appSwitcherColor: appSwitcherColor,
       appSwitcherImageName: appSwitcherImageName,
     );
+
+    _appliedEnabled = enabled;
+    _appliedProtectInAppSwitcher = protectInAppSwitcher;
+    _appliedAppSwitcherColor = appSwitcherColor;
+    _appliedAppSwitcherImageName = appSwitcherImageName;
   }
 
   void dispose() {
     _eventSubscription?.cancel();
+    unawaited(_biometricResultSubscription?.cancel());
     _eventsController.close();
   }
 }

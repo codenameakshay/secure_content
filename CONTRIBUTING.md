@@ -1,73 +1,73 @@
-Contributing to Secure Content
-==========================
+# Contributing to Secure Content
 
-Thanks for your time.
-If you'd like to report a bug or join in the development
-of Secure Content, then here are some notes on how to do that.
+Thank you for helping to improve Secure Content.
 
-Please **note** we have a [code of conduct](https://github.com/codenameakshay/secure_content/blob/master/CODE_OF_CONDUCT.md), please follow it in all your interactions with the project.
+Read the [README](README.md) for the public API and the
+[example guide](example/README.md) for a complete app. Read the
+[changelog](CHANGELOG.md) for release history and the
+[code of conduct](CODE_OF_CONDUCT.md) before you contribute.
 
-## Contents
+## Report an Issue
 
-* [Reporting bugs and opening issues](#reporting-bugs-and-opening-issues)
-* [Coding Guidelines](#coding-guidelines)
-  * [Pull Requests](#pull-requests)
-  * [MVP architecture](#mvp-architecture)
-  * [Style Check](#style-check)
-  * [Git Commit Messages](#git-commit-messages)
-* [Security](#security)
-  
-## Reporting bugs and opening issues
+Search the [open issues](https://github.com/codenameakshay/secure_content/issues)
+before you create an issue. Add details to an existing issue when it matches
+your problem.
 
-If you'd like a report a bug or open an issue then please:
+Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) for a bug.
+Use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md)
+for a feature request.
 
-**Check if there is an existing issue.** If there is then please add
-   any more information that you have, or give it a 👍.
+Include these details:
 
-When submitting an issue please describe the issue as clearly as possible, including how to
-reproduce the bug, which situations it appears in, what you expected to happen, and what actually happens.
-If you can include a screenshot for front end issues that is very helpful.
+- Flutter and Dart versions
+- Platform and OS version
+- Package version
+- Steps to reproduce the problem
+- Expected and actual results
+- Logs or a small reproduction when available
 
-## Coding Guidelines
+## Architecture
 
-### Pull Requests
+`SecureContentScope` owns the Flutter UI for one protected subtree. It renders
+the capture overlay, lock screen, hard-block screen, and risk watermark.
 
-We love pull requests, so be bold with them! Don't be afraid of going ahead
-and changing something, or adding a new feature. We're very happy to work with you
-to get your changes merged into Secure Content.
+`SecureContentService` tracks active scopes and combines their native settings.
+It sends the combined settings through the typed Pigeon platform API.
 
-If you've got an idea for a change then please discuss it in the open first,
-either by opening an issue, or email me at [akshaymaurya3006@gmail.com](mailto:akshaymaurya3006@gmail.com).
+`SecureContentController` provides global protection through the same service.
+The Android and iOS plugins apply native window protection and send platform
+events back to Flutter.
 
-If you're looking for something to work on, have a look at the open issues in the repository [here](https://github.com/codenameakshay/secure_content/issues).
+Keep Flutter UI behavior in `lib/src/secure_content_scope.dart`. Keep shared
+native state in `lib/src/secure_content_service.dart`. Update the Pigeon input
+and generated files together when the platform API changes.
 
-> We don't have a set format for Pull requests, but we expect you to list changes, bugs generated and other relevant things in PR message.
+## Pull Requests
 
-Refer this pull request [template](https://github.com/codenameakshay/secure_content/blob/master/PULL_REQUEST_TEMPLATE.md).
+Before you open a pull request:
 
-### MVP architecture
+- Keep the change focused.
+- Add or update tests for behavior changes.
+- Update the README or changelog when public behavior changes.
+- Run `make check`.
+- Run the relevant Android or iOS build when native files change.
 
-Secure Content is built keeping [MVP (model-view-presenter)](https://en.wikipedia.org/wiki/Model–view–presenter) architecture in mind, so any changes that are proposed to Secure Content should follow MVP architecture.
+Describe the change, test commands, and known limits in the pull request.
 
-### Style Check
+## Commits
 
-Secure Content uses `dartfmt`  for performing style checks on the codebase, which helps us in maintaining the quality of the code. Please check that the code is properly formatted according to `dartfmt` and also resolve all the issues, if any, shown by `dart analyze` before making a pull request. **Pull Requests will only be merged once all the violations are resolved**.
+Use Conventional Commit subjects, such as:
 
-### Git Commit Messages
-
-* Use the present tense ("Add feature" not "Added feature")
-* Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-* Limit the first line to 72 characters or less
-* Reference issues and pull requests liberally
-* When only changing documentation, include `[ci skip]` in the commit description
-* Please start your commits with the following prefixes for better understanding among collaborators, based on the type of commit:
-
+```text
+fix(android): protect the app window during capture
+docs(readme): clarify screenshot detection
 ```
-   feat: (addition of a new feature)
-   rfac: (refactoring the code: optimization/ different logic of existing code - output doesn't change, just the way of execution changes)
-   docs: (documenting the code, be it readme, or extra comments)
-   bfix: (bug fixing)
-   chor: (chore - beautifying code, indents, spaces, camelcasing, changing variable names to have an appropriate meaning)
-   ptch: (patches - small changes in code, mainly UI, for example color of a button, incrasing size of tet, etc etc)
-   conf: (configurational settings - changing directory structure, updating gitignore, add libraries, changing manifest etc)
-```
+
+Use the imperative mood. Keep the subject short. Add a body when the reason
+for the change is not clear from the diff.
+
+## Security
+
+Do not report security problems in a public issue. Contact the maintainer at
+[akshaymaurya3006@gmail.com](mailto:akshaymaurya3006@gmail.com) with the
+details.

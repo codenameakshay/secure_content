@@ -10,10 +10,12 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   private var protectInAppSwitcher = true
   private var appSwitcherColor: UIColor = .black
   private var appSwitcherImageName: String?
+  private var platformReadyEmitted = false
 
   private let captureOverlayTag = 991001
   private let appSwitcherOverlayTag = 991002
   private var clipboardClearWorkItem: DispatchWorkItem?
+  private var lastSensitiveClipboardContent: String?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = SecureContentPlugin()
@@ -21,7 +23,6 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
 
     SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
     instance.setupObservers()
-    instance.emit(type: "platformReady")
   }
 
   deinit {
@@ -35,6 +36,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     appSwitcherImageName = config.appSwitcherImageName
 
     applyProtectionState()
+    emitPlatformReadyOnce()
   }
 
   func isScreenCaptured() throws -> Bool {
@@ -66,6 +68,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
 
   func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws {
     UIPasteboard.general.string = content
+    lastSensitiveClipboardContent = content
     emit(type: "clipboardSet")
 
     clipboardClearWorkItem?.cancel()
@@ -83,7 +86,10 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   }
 
   func clearSensitiveClipboard() throws {
-    UIPasteboard.general.string = ""
+    if let expected = lastSensitiveClipboardContent, UIPasteboard.general.string == expected {
+      UIPasteboard.general.string = ""
+    }
+    lastSensitiveClipboardContent = nil
     clipboardClearWorkItem?.cancel()
     clipboardClearWorkItem = nil
     emit(type: "clipboardCleared")
@@ -133,6 +139,12 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     }
   }
 
+  private func emitPlatformReadyOnce() {
+    guard !platformReadyEmitted else { return }
+    platformReadyEmitted = true
+    emit(type: "platformReady")
+  }
+
   @objc private func handleScreenshot() {
     guard secureEnabled else { return }
     emit(type: "screenshotCaptured")
@@ -154,8 +166,10 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
 
   @objc private func handleAppWillResignActive() {
     guard secureEnabled && protectInAppSwitcher else { return }
-    showOverlay(tag: appSwitcherOverlayTag, color: appSwitcherColor, imageName: appSwitcherImageName)
-    emit(type: "appSwitcherProtected")
+    let installed = showOverlay(tag: appSwitcherOverlayTag, color: appSwitcherColor, imageName: appSwitcherImageName)
+    if installed {
+      emit(type: "appSwitcherProtected")
+    }
   }
 
   @objc private func handleAppDidBecomeActive() {
@@ -165,9 +179,23 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
     }
   }
 
-  private func showOverlay(tag: Int, color: UIColor, imageName: String? = nil) {
-    guard let window = keyWindow() else { return }
+  // Installs (or removes) the privacy overlay on every window of every
+  // connected scene, not just the key window, so multi-window/multi-scene
+  // apps (iPad Split View, Stage Manager, multiple UIWindowScenes) stay
+  // covered. On a single-scene app this is exactly the same window set as
+  // before.
+  @discardableResult
+  private func showOverlay(tag: Int, color: UIColor, imageName: String? = nil) -> Bool {
+    let windows = allWindows()
+    guard !windows.isEmpty else { return false }
 
+    for window in windows {
+      installOverlay(in: window, tag: tag, color: color, imageName: imageName)
+    }
+    return true
+  }
+
+  private func installOverlay(in window: UIWindow, tag: Int, color: UIColor, imageName: String?) {
     if let existing = window.viewWithTag(tag) {
       existing.backgroundColor = color
       existing.isHidden = false
@@ -205,19 +233,19 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   }
 
   private func hideOverlay(tag: Int) {
-    guard let window = keyWindow() else { return }
-    window.viewWithTag(tag)?.removeFromSuperview()
+    for window in allWindows() {
+      window.viewWithTag(tag)?.removeFromSuperview()
+    }
   }
 
-  private func keyWindow() -> UIWindow? {
+  private func allWindows() -> [UIWindow] {
     if #available(iOS 13.0, *) {
       return UIApplication.shared.connectedScenes
         .compactMap { $0 as? UIWindowScene }
         .flatMap { $0.windows }
-        .first(where: { $0.isKeyWindow })
     }
 
-    return UIApplication.shared.windows.first(where: { $0.isKeyWindow })
+    return UIApplication.shared.windows
   }
 
   private func emit(type: String) {

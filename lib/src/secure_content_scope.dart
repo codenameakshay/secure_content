@@ -77,7 +77,10 @@ class _SecureContentScopeState extends State<SecureContentScope>
   bool _isCaptured = false;
   bool _isLocked = false;
   bool _isAuthenticating = false;
+  bool _isBiometricLocked = false;
   bool _needsBiometricAuth = false;
+  bool _biometricUnavailable = false;
+  int _biometricRequestGeneration = 0;
   bool _integrityRiskDetected = false;
   bool _appSwitcherProtected = false;
   bool _isAppActive = true;
@@ -91,9 +94,23 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _eventsSubscription = _service.events.listen(_handleEvent);
 
     _primeCaptureState();
+
     _needsBiometricAuth =
         widget.policy.requireBiometricOnResume && widget.enabled;
-    _primePolicy();
+    if (_needsBiometricAuth) {
+      // Set the initial lock synchronously, before the first build and
+      // before any async integrity/biometric work starts, so protected
+      // content is never rendered even for a single frame (AUTH-02).
+      _isLocked = true;
+      _isBiometricLocked = true;
+      _isAuthenticating = true;
+      final generation = ++_biometricRequestGeneration;
+      unawaited(
+        _awaitBiometricResult(widget.policy.biometricReason, generation),
+      );
+    }
+
+    _maybeCheckIntegrity();
     _restartIdleTimer();
   }
 
@@ -108,14 +125,79 @@ class _SecureContentScopeState extends State<SecureContentScope>
       _bindSource();
     }
 
-    if (oldWidget.policy.inactivityTimeout != widget.policy.inactivityTimeout) {
+    // LIFE-01: centralize policy application here so every policy field
+    // that can change at runtime actually takes effect immediately, instead
+    // of only inactivityTimeout doing so.
+    final enabledChanged = oldWidget.enabled != widget.enabled;
+
+    if (enabledChanged && !widget.enabled) {
+      // STATE-01: disabling protection must hard-block every side effect
+      // right away, not just stop new ones from starting.
+      _biometricRequestGeneration += 1;
+      _isAuthenticating = false;
+      _isBiometricLocked = false;
+      _needsBiometricAuth = false;
+      _updateState(() {
+        _isLocked = false;
+        _integrityRiskDetected = false;
+        _biometricUnavailable = false;
+      });
+    }
+
+    final biometricPolicyDisabled =
+        oldWidget.policy.requireBiometricOnResume &&
+        !widget.policy.requireBiometricOnResume;
+    if (biometricPolicyDisabled) {
+      // A policy that no longer requires biometrics must not leave a stale
+      // pending request behind. Incrementing the generation makes any late
+      // result from that request inert.
+      _biometricRequestGeneration += 1;
+      _needsBiometricAuth = false;
+      _isAuthenticating = false;
+      if (_isBiometricLocked) {
+        _unlock();
+      }
+    }
+
+    final biometricJustRequired =
+        widget.enabled &&
+        widget.policy.requireBiometricOnResume &&
+        (!oldWidget.enabled || !oldWidget.policy.requireBiometricOnResume);
+    if (biometricJustRequired) {
+      _needsBiometricAuth = true;
+      _lockAndRequestBiometric();
+    }
+
+    final integrityChecksJustDisabled =
+        oldWidget.policy.enableIntegrityChecks &&
+        !widget.policy.enableIntegrityChecks;
+    if (integrityChecksJustDisabled && _integrityRiskDetected) {
+      _updateState(() {
+        _integrityRiskDetected = false;
+      });
+    }
+
+    final integrityChecksJustEnabled =
+        widget.policy.enableIntegrityChecks &&
+        (enabledChanged || !oldWidget.policy.enableIntegrityChecks);
+    if (integrityChecksJustEnabled) {
+      _maybeCheckIntegrity();
+    }
+
+    if (enabledChanged ||
+        oldWidget.policy.inactivityTimeout != widget.policy.inactivityTimeout) {
       _restartIdleTimer();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _isAppActive = state == AppLifecycleState.resumed;
+    // LIFE-02: this feeds build()'s riskyState derivation, so it must go
+    // through setState (when mounted) instead of a raw field assignment,
+    // or the watermark/risk UI can go stale until some unrelated rebuild.
+    _updateState(() {
+      _isAppActive = state == AppLifecycleState.resumed;
+    });
 
     if (state == AppLifecycleState.resumed) {
       if (widget.policy.requireBiometricOnResume &&
@@ -123,9 +205,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
           _needsBiometricAuth) {
         _lockAndRequestBiometric();
       }
-      if (widget.policy.enableIntegrityChecks) {
-        unawaited(_service.checkIntegrity());
-      }
+      _maybeCheckIntegrity();
       _restartIdleTimer();
       return;
     }
@@ -166,17 +246,31 @@ class _SecureContentScopeState extends State<SecureContentScope>
     });
   }
 
-  Future<void> _primePolicy() async {
-    if (widget.policy.enableIntegrityChecks) {
-      await _service.checkIntegrity();
-    }
-    if (_needsBiometricAuth) {
-      _lockAndRequestBiometric();
+  void _maybeCheckIntegrity() {
+    if (widget.enabled && widget.policy.enableIntegrityChecks) {
+      unawaited(_service.checkIntegrity());
     }
   }
 
   void _handleEvent(SecureContentEvent event) {
-    widget.onEvent?.call(event);
+    // A throwing consumer callback must not prevent this scope from
+    // processing the event internally (EVENT-01): report the error through
+    // the normal Flutter error pipeline instead of letting it propagate out
+    // of this stream listener and skip the switch below.
+    try {
+      widget.onEvent?.call(event);
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'secure_content',
+          context: ErrorDescription(
+            'while handling a SecureContentScope onEvent callback',
+          ),
+        ),
+      );
+    }
 
     switch (event.type) {
       case SecureContentEventType.recordingStarted:
@@ -200,31 +294,29 @@ class _SecureContentScopeState extends State<SecureContentScope>
         });
         break;
       case SecureContentEventType.integrityRiskDetected:
+        if (!widget.enabled || !widget.policy.enableIntegrityChecks) {
+          break;
+        }
         _updateState(() {
           _integrityRiskDetected = true;
-          if (widget.policy.hardBlockOnIntegrityRisk) {
-            _isLocked = true;
-          }
         });
         break;
       case SecureContentEventType.integritySafe:
+        if (!widget.enabled || !widget.policy.enableIntegrityChecks) {
+          break;
+        }
         _updateState(() {
           _integrityRiskDetected = false;
-          if (widget.policy.hardBlockOnIntegrityRisk) {
-            _isLocked = false;
-          }
         });
         break;
       case SecureContentEventType.biometricAuthSucceeded:
-        _isAuthenticating = false;
-        _needsBiometricAuth = false;
-        _unlock();
-        break;
       case SecureContentEventType.biometricAuthFailed:
-        _isAuthenticating = false;
-        break;
       case SecureContentEventType.biometricUnavailable:
-        _isAuthenticating = false;
+        // Biometric outcomes are correlated per-request through the Future
+        // returned by SecureContentService.requestBiometricAuth (see
+        // _awaitBiometricResult). This raw broadcast event may belong to a
+        // request some other SecureContentScope made, so it must not mutate
+        // this scope's lock state.
         break;
       case SecureContentEventType.platformReady:
       case SecureContentEventType.screenshotCaptured:
@@ -267,6 +359,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
   void _unlock() {
     _updateState(() {
       _isLocked = false;
+      _isBiometricLocked = false;
     });
     _service.emitLocalEvent(SecureContentEventType.idleLockReleased);
     _restartIdleTimer();
@@ -277,8 +370,45 @@ class _SecureContentScopeState extends State<SecureContentScope>
       return;
     }
     _isAuthenticating = true;
+    _isBiometricLocked = true;
+    final generation = ++_biometricRequestGeneration;
     _activateIdleLock();
-    unawaited(_service.requestBiometricAuth(widget.policy.biometricReason));
+    unawaited(_awaitBiometricResult(widget.policy.biometricReason, generation));
+  }
+
+  /// Awaits the outcome of this scope's own biometric request and updates
+  /// only this scope's state from it, instead of reacting to the shared
+  /// broadcast event stream (which every SecureContentScope listens to and
+  /// which may carry another scope's request outcome).
+  Future<void> _awaitBiometricResult(String reason, int generation) async {
+    final outcome = await _service.requestBiometricAuth(reason);
+    if (!mounted || generation != _biometricRequestGeneration) {
+      return;
+    }
+    _isAuthenticating = false;
+    switch (outcome) {
+      case SecureContentEventType.biometricAuthSucceeded:
+        _needsBiometricAuth = false;
+        _updateState(() {
+          _biometricUnavailable = false;
+        });
+        _unlock();
+        break;
+      case SecureContentEventType.biometricUnavailable:
+        // AUTH-03: fail closed. Stay locked and surface an explicit
+        // unavailable state so the UI can explain why, instead of leaving
+        // the user stuck on a generic "unlock with biometrics" prompt that
+        // will never succeed on this device.
+        _updateState(() {
+          _biometricUnavailable = true;
+        });
+        break;
+      default:
+        _updateState(() {
+          _biometricUnavailable = false;
+        });
+        break;
+    }
   }
 
   void _onUserInteraction() {
@@ -299,7 +429,9 @@ class _SecureContentScopeState extends State<SecureContentScope>
   @override
   Widget build(BuildContext context) {
     final isHardBlocked =
-        widget.policy.hardBlockOnIntegrityRisk && _integrityRiskDetected;
+        widget.enabled &&
+        widget.policy.hardBlockOnIntegrityRisk &&
+        _integrityRiskDetected;
 
     final showCaptureOverlay =
         widget.debugShowOverlay || (widget.enabled && _isCaptured);
@@ -368,22 +500,44 @@ class _SecureContentScopeState extends State<SecureContentScope>
 
   Widget _buildDefaultLockScreen() {
     return ColoredBox(
-      color: Colors.black.withValues(alpha: 0.88),
+      color: Colors.black,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.lock_outline, color: Colors.white, size: 36),
-            const SizedBox(height: 12),
-            const Text(
-              'Session locked',
-              style: TextStyle(color: Colors.white, fontSize: 18),
+            Icon(
+              _biometricUnavailable
+                  ? Icons.fingerprint_outlined
+                  : Icons.lock_outline,
+              color: Colors.white,
+              size: 36,
             ),
+            const SizedBox(height: 12),
+            Text(
+              _biometricUnavailable
+                  ? 'Biometric authentication unavailable'
+                  : 'Session locked',
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+            ),
+            if (_biometricUnavailable) ...[
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'This device cannot verify biometrics right now. '
+                  'The screen stays locked until it can.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _handleUnlock,
               child: Text(
-                widget.policy.requireBiometricOnResume
+                _biometricUnavailable
+                    ? 'Try again'
+                    : widget.policy.requireBiometricOnResume
                     ? 'Unlock with biometrics'
                     : 'Unlock',
               ),

@@ -3,7 +3,7 @@ plugins {
 }
 
 group 'com.codenameakshay.secure_content'
-version '2.0-SNAPSHOT'
+version '2.0.0'
 
 dependencies {
     implementation 'androidx.biometric:biometric:1.1.0'

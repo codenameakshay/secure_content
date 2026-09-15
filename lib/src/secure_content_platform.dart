@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'pigeon/secure_content_api.g.dart' as pigeon;
 import 'secure_content_event.dart';
 
@@ -11,10 +13,15 @@ class SecureContentPlatform {
 
   static final SecureContentPlatform instance = SecureContentPlatform._();
 
+  @visibleForTesting
+  static bool? debugIsSupportedPlatformOverride;
+
   final pigeon.SecureContentHostApi _hostApi = pigeon.SecureContentHostApi();
   final _FlutterApiBridge _flutterApiBridge = _FlutterApiBridge();
 
-  bool get isSupportedPlatform => Platform.isAndroid || Platform.isIOS;
+  bool get isSupportedPlatform =>
+      debugIsSupportedPlatformOverride ??
+      (Platform.isAndroid || Platform.isIOS);
 
   Stream<SecureContentEvent> get events => _flutterApiBridge.events;
 

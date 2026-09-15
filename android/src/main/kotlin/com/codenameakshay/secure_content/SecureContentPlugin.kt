@@ -32,8 +32,6 @@ import java.io.File
 /** SecureContentPlugin */
 class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
-    private lateinit var binding: FlutterPlugin.FlutterPluginBinding
-
     private var activity: Activity? = null
     private var flutterApi: SecureContentFlutterApi? = null
     private var screenshotCallback: Activity.ScreenCaptureCallback? = null
@@ -43,12 +41,15 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var secureEnabled: Boolean = false
     private var appSwitcherProtectionEnabled: Boolean = true
     private var appSwitcherColor: Int = Color.BLACK
+    private var originalNavigationBarColor: Int? = null
+    private lateinit var appContext: Context
+    private var lastSensitiveClipboardContent: String? = null
+    private var platformReadyEmitted: Boolean = false
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        binding = flutterPluginBinding
-        flutterApi = SecureContentFlutterApi(binding.binaryMessenger)
-        SecureContentHostApi.setUp(binding.binaryMessenger, this)
-        emitEvent("platformReady")
+        appContext = flutterPluginBinding.applicationContext
+        flutterApi = SecureContentFlutterApi(flutterPluginBinding.binaryMessenger)
+        SecureContentHostApi.setUp(flutterPluginBinding.binaryMessenger, this)
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -63,6 +64,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         appSwitcherProtectionEnabled = config.protectInAppSwitcher
         appSwitcherColor = config.appSwitcherColor.toInt()
         applyProtection()
+        emitPlatformReadyOnce()
     }
 
     override fun isScreenCaptured(): Boolean {
@@ -74,40 +76,65 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             emitEvent("biometricUnavailable")
             return
         }
+
+        val title = if (reason.isBlank()) "Authenticate" else reason
+        // AndroidX Biometric supports API 23+, so try it first whenever the host
+        // Activity is a FragmentActivity, before falling back to the API 28+
+        // framework prompt below. This lets API 23-27 hosts authenticate instead
+        // of being rejected purely for being below the framework's minimum.
+        val fragmentActivity = currentActivity as? FragmentActivity
+        if (fragmentActivity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val authenticators = androidXBiometricAuthenticators()
+            val biometricManager = BiometricManager.from(fragmentActivity)
+            if (biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS) {
+                requestBiometricWithAndroidX(fragmentActivity, title, authenticators)
+            } else {
+                emitEvent("biometricUnavailable")
+            }
+            return
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             emitEvent("biometricUnavailable")
             return
         }
 
-        val title = if (reason.isBlank()) "Authenticate" else reason
+        val authenticators = frameworkBiometricAuthenticators()
         val biometricManager = BiometricManager.from(currentActivity)
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
-
         if (biometricManager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
             emitEvent("biometricUnavailable")
-            return
-        }
-
-        val fragmentActivity = currentActivity as? FragmentActivity
-        if (fragmentActivity != null) {
-            requestBiometricWithAndroidX(fragmentActivity, title)
             return
         }
 
         requestBiometricWithFramework(currentActivity, title)
     }
 
+    private fun androidXBiometricAuthenticators(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
+        }
+    }
+
+    private fun frameworkBiometricAuthenticators(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
+        }
+    }
+
     private fun requestBiometricWithAndroidX(
         fragmentActivity: FragmentActivity,
         title: String,
+        authenticators: Int,
     ) {
         val promptInfo = AndroidXBiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
-            .setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_WEAK or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-            )
+            .setAllowedAuthenticators(authenticators)
             .build()
 
         val biometricPrompt = AndroidXBiometricPrompt(
@@ -124,10 +151,6 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
                     emitEvent("biometricAuthFailed")
                 }
 
-                override fun onAuthenticationFailed() {
-                    super.onAuthenticationFailed()
-                    emitEvent("biometricAuthFailed")
-                }
             },
         )
         biometricPrompt.authenticate(promptInfo)
@@ -142,11 +165,6 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             override fun onAuthenticationSucceeded(result: FrameworkBiometricPrompt.AuthenticationResult?) {
                 super.onAuthenticationSucceeded(result)
                 emitEvent("biometricAuthSucceeded")
-            }
-
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                emitEvent("biometricAuthFailed")
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
@@ -183,8 +201,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     }
 
     override fun setSensitiveClipboard(content: String, clearAfterMs: Long) {
-        val currentActivity = activity ?: return
-        val clipboardManager = currentActivity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipboardManager = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clipData = ClipData.newPlainText("secure_content", content)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             val extras = PersistableBundle()
@@ -192,6 +209,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             clipData.description.extras = extras
         }
         clipboardManager.setPrimaryClip(clipData)
+        lastSensitiveClipboardContent = content
         emitEvent("clipboardSet")
 
         clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
@@ -205,12 +223,21 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     }
 
     override fun clearSensitiveClipboard() {
-        val currentActivity = activity ?: return
-        val clipboardManager = currentActivity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboardManager.setPrimaryClip(ClipData.newPlainText("secure_content", ""))
+        val clipboardManager = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val expected = lastSensitiveClipboardContent
+        if (expected != null && currentClipboardText(clipboardManager) == expected) {
+            clipboardManager.setPrimaryClip(ClipData.newPlainText("secure_content", ""))
+        }
+        lastSensitiveClipboardContent = null
         clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
         clipboardClearRunnable = null
         emitEvent("clipboardCleared")
+    }
+
+    private fun currentClipboardText(clipboardManager: ClipboardManager): String? {
+        val clip = clipboardManager.primaryClip ?: return null
+        if (clip.itemCount == 0) return null
+        return clip.getItemAt(0).coerceToText(appContext)?.toString()
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -222,6 +249,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun onDetachedFromActivityForConfigChanges() {
         unregisterScreenshotCallbackIfAvailable()
         activity = null
+        originalNavigationBarColor = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
@@ -233,6 +261,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun onDetachedFromActivity() {
         unregisterScreenshotCallbackIfAvailable()
         activity = null
+        originalNavigationBarColor = null
     }
 
     private fun registerScreenshotCallbackIfAvailable() {
@@ -318,10 +347,23 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
                 currentActivity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && appSwitcherProtectionEnabled) {
+            if (appSwitcherProtectionEnabled) {
+                if (originalNavigationBarColor == null) {
+                    originalNavigationBarColor = currentActivity.window.navigationBarColor
+                }
                 currentActivity.window.navigationBarColor = appSwitcherColor
+            } else {
+                originalNavigationBarColor?.let { currentActivity.window.navigationBarColor = it }
             }
         }
+    }
+
+    private fun emitPlatformReadyOnce() {
+        if (platformReadyEmitted) {
+            return
+        }
+        platformReadyEmitted = true
+        emitEvent("platformReady")
     }
 
     private fun emitEvent(type: String) {
