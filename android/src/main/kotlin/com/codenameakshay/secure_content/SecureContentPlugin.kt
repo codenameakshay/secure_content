@@ -77,24 +77,34 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             emitEvent("biometricUnavailable")
             return
         }
+
+        val title = if (reason.isBlank()) "Authenticate" else reason
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
+        // AndroidX Biometric supports API 23+, so try it first whenever the host
+        // Activity is a FragmentActivity, before falling back to the API 28+
+        // framework prompt below. This lets API 23-27 hosts authenticate instead
+        // of being rejected purely for being below the framework's minimum.
+        val fragmentActivity = currentActivity as? FragmentActivity
+        if (fragmentActivity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val biometricManager = BiometricManager.from(fragmentActivity)
+            if (biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS) {
+                requestBiometricWithAndroidX(fragmentActivity, title)
+            } else {
+                emitEvent("biometricUnavailable")
+            }
+            return
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             emitEvent("biometricUnavailable")
             return
         }
 
-        val title = if (reason.isBlank()) "Authenticate" else reason
         val biometricManager = BiometricManager.from(currentActivity)
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
-
         if (biometricManager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
             emitEvent("biometricUnavailable")
-            return
-        }
-
-        val fragmentActivity = currentActivity as? FragmentActivity
-        if (fragmentActivity != null) {
-            requestBiometricWithAndroidX(fragmentActivity, title)
             return
         }
 
