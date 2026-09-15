@@ -93,11 +93,11 @@ SecureContentScope(
 
 ## App Switcher Branding (iOS)
 
-When the app moves to the background, the multitasking snapshot and biometric
-re-auth moment are covered by a privacy overlay. By default this is a flat
-`appSwitcherColor` fill. Pass `appSwitcherImageName` to center one of your host
-app's native asset-catalog images on that overlay, rendered as a white-tinted
-template, so the snapshot shows your branding instead:
+On iOS, when the app moves to the background, the multitasking snapshot and
+biometric re-auth moment are covered by a privacy overlay. By default this is
+a flat `appSwitcherColor` fill. Pass `appSwitcherImageName` to center one of
+your host app's native asset-catalog images on that overlay, rendered as a
+white-tinted template:
 
 ```dart
 SecureContentScope(
@@ -110,8 +110,10 @@ SecureContentScope(
 )
 ```
 
-> Note: `appSwitcherImageName` is iOS-only. On Android the app-switcher overlay
-> uses `appSwitcherColor`; the image name is ignored.
+> Note: `appSwitcherImageName` is iOS-only. Android uses `FLAG_SECURE` for
+> capture and app-switcher protection. When `protectInAppSwitcher` is true,
+> Android also sets the navigation-bar color to `appSwitcherColor`. Android
+> does not add a branded app-switcher overlay, and it ignores the image name.
 
 ## Global Protection
 
