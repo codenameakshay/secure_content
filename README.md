@@ -185,6 +185,10 @@ Key event types include:
   audio separately in the recording or media layer.
 - Android system clipboard "Copied to clipboard" toast is controlled by the OS and cannot be disabled by apps.
 - Integrity checks are heuristic signals, not a guaranteed anti-tamper boundary.
+- The iOS example keeps CocoaPods integration. Flutter 3.44.3 SPM mode can
+  fail because the checked-in project resolves `../FlutterFramework` to the
+  missing `ios/FlutterFramework` path. The Xcode project needs migration before
+  SPM builds are reliable.
 
 ## Example
 
