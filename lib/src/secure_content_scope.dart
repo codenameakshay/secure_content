@@ -78,6 +78,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
   bool _isLocked = false;
   bool _isAuthenticating = false;
   bool _needsBiometricAuth = false;
+  bool _biometricUnavailable = false;
   bool _integrityRiskDetected = false;
   bool _appSwitcherProtected = false;
   bool _isAppActive = true;
@@ -300,9 +301,28 @@ class _SecureContentScopeState extends State<SecureContentScope>
       return;
     }
     _isAuthenticating = false;
-    if (outcome == SecureContentEventType.biometricAuthSucceeded) {
-      _needsBiometricAuth = false;
-      _unlock();
+    switch (outcome) {
+      case SecureContentEventType.biometricAuthSucceeded:
+        _needsBiometricAuth = false;
+        _updateState(() {
+          _biometricUnavailable = false;
+        });
+        _unlock();
+        break;
+      case SecureContentEventType.biometricUnavailable:
+        // AUTH-03: fail closed. Stay locked and surface an explicit
+        // unavailable state so the UI can explain why, instead of leaving
+        // the user stuck on a generic "unlock with biometrics" prompt that
+        // will never succeed on this device.
+        _updateState(() {
+          _biometricUnavailable = true;
+        });
+        break;
+      default:
+        _updateState(() {
+          _biometricUnavailable = false;
+        });
+        break;
     }
   }
 
@@ -400,17 +420,39 @@ class _SecureContentScopeState extends State<SecureContentScope>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.lock_outline, color: Colors.white, size: 36),
-            const SizedBox(height: 12),
-            const Text(
-              'Session locked',
-              style: TextStyle(color: Colors.white, fontSize: 18),
+            Icon(
+              _biometricUnavailable
+                  ? Icons.fingerprint_outlined
+                  : Icons.lock_outline,
+              color: Colors.white,
+              size: 36,
             ),
+            const SizedBox(height: 12),
+            Text(
+              _biometricUnavailable
+                  ? 'Biometric authentication unavailable'
+                  : 'Session locked',
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+            ),
+            if (_biometricUnavailable) ...[
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'This device cannot verify biometrics right now. '
+                  'The screen stays locked until it can.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _handleUnlock,
               child: Text(
-                widget.policy.requireBiometricOnResume
+                _biometricUnavailable
+                    ? 'Try again'
+                    : widget.policy.requireBiometricOnResume
                     ? 'Unlock with biometrics'
                     : 'Unlock',
               ),

@@ -133,6 +133,13 @@ void main() {
         // the child), proving the lock was applied before the async
         // integrity check could possibly have resolved.
         expect(find.text('Session locked'), findsOneWidget);
+
+        // Resolve the in-flight biometric request so it does not leak into
+        // later tests sharing the SecureContentService singleton.
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
       },
     );
   });
@@ -210,6 +217,43 @@ void main() {
         expect(find.text('protected'), findsOneWidget);
       },
     );
+  });
+
+  // AUTH-03: explicit biometric-unavailable state/UI with a clear, still
+  // fail-closed recovery path.
+  group('biometric unavailable', () {
+    testWidgets('shows an explicit unavailable message and stays locked, then '
+        'recovers once biometrics succeed on retry', (tester) async {
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(requireBiometricOnResume: true),
+        ),
+      );
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.biometricUnavailable,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Biometric authentication unavailable'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+
+      // Fail-closed: tapping the recovery action re-attempts biometric
+      // auth, it never unlocks directly.
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      expect(find.text('Biometric authentication unavailable'), findsOneWidget);
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.biometricAuthSucceeded,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('protected'), findsOneWidget);
+      expect(find.text('Biometric authentication unavailable'), findsNothing);
+    });
   });
 
   // (c) onUnlock actually unlocks
