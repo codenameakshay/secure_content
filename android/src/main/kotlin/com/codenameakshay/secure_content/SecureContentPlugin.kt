@@ -43,6 +43,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var secureEnabled: Boolean = false
     private var appSwitcherProtectionEnabled: Boolean = true
     private var appSwitcherColor: Int = Color.BLACK
+    private var originalNavigationBarColor: Int? = null
     private lateinit var appContext: Context
     private var lastSensitiveClipboardContent: String? = null
 
@@ -340,8 +341,15 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
                 currentActivity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && appSwitcherProtectionEnabled) {
-                currentActivity.window.navigationBarColor = appSwitcherColor
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                if (appSwitcherProtectionEnabled) {
+                    if (originalNavigationBarColor == null) {
+                        originalNavigationBarColor = currentActivity.window.navigationBarColor
+                    }
+                    currentActivity.window.navigationBarColor = appSwitcherColor
+                } else {
+                    originalNavigationBarColor?.let { currentActivity.window.navigationBarColor = it }
+                }
             }
         }
     }
