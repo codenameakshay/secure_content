@@ -113,6 +113,30 @@ void main() {
     });
   });
 
+  // AUTH-02: initial biometric lock must be synchronous, before any async
+  // integrity work, so protected content never flashes on the first frame.
+  group('initial lock timing', () {
+    testWidgets(
+      'locks on the very first frame, before integrity checks can resolve',
+      (tester) async {
+        await tester.pumpWidget(
+          buildScope(
+            policy: const SecureContentPolicy(
+              requireBiometricOnResume: true,
+              enableIntegrityChecks: true,
+            ),
+          ),
+        );
+
+        // No extra pump: this is the first frame produced by pumpWidget.
+        // The lock overlay must already be present (it is opaque and covers
+        // the child), proving the lock was applied before the async
+        // integrity check could possibly have resolved.
+        expect(find.text('Session locked'), findsOneWidget);
+      },
+    );
+  });
+
   // (b) Custom builder renders when provided
   group('custom builders', () {
     testWidgets(

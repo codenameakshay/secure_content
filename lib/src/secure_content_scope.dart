@@ -91,9 +91,19 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _eventsSubscription = _service.events.listen(_handleEvent);
 
     _primeCaptureState();
+
     _needsBiometricAuth =
         widget.policy.requireBiometricOnResume && widget.enabled;
-    _primePolicy();
+    if (_needsBiometricAuth) {
+      // Set the initial lock synchronously, before the first build and
+      // before any async integrity/biometric work starts, so protected
+      // content is never rendered even for a single frame (AUTH-02).
+      _isLocked = true;
+      _isAuthenticating = true;
+      unawaited(_awaitBiometricResult(widget.policy.biometricReason));
+    }
+
+    _maybeCheckIntegrity();
     _restartIdleTimer();
   }
 
@@ -123,9 +133,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
           _needsBiometricAuth) {
         _lockAndRequestBiometric();
       }
-      if (widget.enabled && widget.policy.enableIntegrityChecks) {
-        unawaited(_service.checkIntegrity());
-      }
+      _maybeCheckIntegrity();
       _restartIdleTimer();
       return;
     }
@@ -166,12 +174,9 @@ class _SecureContentScopeState extends State<SecureContentScope>
     });
   }
 
-  Future<void> _primePolicy() async {
+  void _maybeCheckIntegrity() {
     if (widget.enabled && widget.policy.enableIntegrityChecks) {
-      await _service.checkIntegrity();
-    }
-    if (_needsBiometricAuth) {
-      _lockAndRequestBiometric();
+      unawaited(_service.checkIntegrity());
     }
   }
 
