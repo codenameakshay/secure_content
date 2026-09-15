@@ -165,7 +165,16 @@ class _SecureContentScopeState extends State<SecureContentScope>
         (!oldWidget.enabled || !oldWidget.policy.requireBiometricOnResume);
     if (biometricJustRequired) {
       _needsBiometricAuth = true;
-      _lockAndRequestBiometric(joinInFlight: false);
+      _lockAndRequestBiometric();
+    }
+
+    final integrityChecksJustDisabled =
+        oldWidget.policy.enableIntegrityChecks &&
+        !widget.policy.enableIntegrityChecks;
+    if (integrityChecksJustDisabled && _integrityRiskDetected) {
+      _updateState(() {
+        _integrityRiskDetected = false;
+      });
     }
 
     final integrityChecksJustEnabled =
@@ -285,7 +294,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
         });
         break;
       case SecureContentEventType.integrityRiskDetected:
-        if (!widget.enabled) {
+        if (!widget.enabled || !widget.policy.enableIntegrityChecks) {
           break;
         }
         _updateState(() {
@@ -293,7 +302,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
         });
         break;
       case SecureContentEventType.integritySafe:
-        if (!widget.enabled) {
+        if (!widget.enabled || !widget.policy.enableIntegrityChecks) {
           break;
         }
         _updateState(() {
@@ -356,7 +365,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _restartIdleTimer();
   }
 
-  void _lockAndRequestBiometric({bool joinInFlight = true}) {
+  void _lockAndRequestBiometric() {
     if (_isAuthenticating || !widget.enabled) {
       return;
     }
@@ -364,28 +373,15 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _isBiometricLocked = true;
     final generation = ++_biometricRequestGeneration;
     _activateIdleLock();
-    unawaited(
-      _awaitBiometricResult(
-        widget.policy.biometricReason,
-        generation,
-        joinInFlight: joinInFlight,
-      ),
-    );
+    unawaited(_awaitBiometricResult(widget.policy.biometricReason, generation));
   }
 
   /// Awaits the outcome of this scope's own biometric request and updates
   /// only this scope's state from it, instead of reacting to the shared
   /// broadcast event stream (which every SecureContentScope listens to and
   /// which may carry another scope's request outcome).
-  Future<void> _awaitBiometricResult(
-    String reason,
-    int generation, {
-    bool joinInFlight = true,
-  }) async {
-    final outcome = await _service.requestBiometricAuth(
-      reason,
-      joinInFlight: joinInFlight,
-    );
+  Future<void> _awaitBiometricResult(String reason, int generation) async {
+    final outcome = await _service.requestBiometricAuth(reason);
     if (!mounted || generation != _biometricRequestGeneration) {
       return;
     }

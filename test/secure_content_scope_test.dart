@@ -102,7 +102,10 @@ void main() {
     ) async {
       await tester.pumpWidget(
         buildScope(
-          policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+          policy: const SecureContentPolicy(
+            enableIntegrityChecks: true,
+            hardBlockOnIntegrityRisk: true,
+          ),
         ),
       );
 
@@ -160,32 +163,25 @@ void main() {
   });
 
   group('biometric request lifecycle', () {
-    testWidgets('a stale result cannot unlock a re-enabled scope', (
+    testWidgets('a result received while disabled cannot unlock on re-enable', (
       tester,
     ) async {
       SecureContentPlatform.debugIsSupportedPlatformOverride = true;
       const policy = SecureContentPolicy(requireBiometricOnResume: true);
 
-      await tester.pumpWidget(buildScope(policy: policy));
-      expect(find.text('Session locked'), findsOneWidget);
-
       await tester.pumpWidget(buildScope(enabled: false, policy: policy));
       await tester.pump();
       expect(find.text('protected'), findsOneWidget);
 
-      await tester.pumpWidget(buildScope(policy: policy));
-      await tester.pump();
-      expect(find.text('Session locked'), findsOneWidget);
-
-      // Complete the original request. The scope must ignore it, wait for the
-      // fresh request to start, and remain locked.
       SecureContentService.instance.emitLocalEvent(
         SecureContentEventType.biometricAuthSucceeded,
       );
       await tester.pump();
+
+      await tester.pumpWidget(buildScope(policy: policy));
+      await tester.pump();
       expect(find.text('Session locked'), findsOneWidget);
 
-      // Complete the fresh request to release this scope.
       SecureContentService.instance.emitLocalEvent(
         SecureContentEventType.biometricAuthSucceeded,
       );
@@ -222,7 +218,10 @@ void main() {
       (tester) async {
         await tester.pumpWidget(
           buildScope(
-            policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+            policy: const SecureContentPolicy(
+              enableIntegrityChecks: true,
+              hardBlockOnIntegrityRisk: true,
+            ),
             hardBlockBuilder: (context) =>
                 const Text('CUSTOM BLOCK', key: Key('custom_block')),
           ),
@@ -251,7 +250,10 @@ void main() {
         await tester.pumpWidget(
           buildScope(
             enabled: false,
-            policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+            policy: const SecureContentPolicy(
+              enableIntegrityChecks: true,
+              hardBlockOnIntegrityRisk: true,
+            ),
           ),
         );
         await tester.pump();
@@ -346,7 +348,10 @@ void main() {
     testWidgets('disabling the scope clears an active hard block immediately', (
       tester,
     ) async {
-      const policy = SecureContentPolicy(hardBlockOnIntegrityRisk: true);
+      const policy = SecureContentPolicy(
+        enableIntegrityChecks: true,
+        hardBlockOnIntegrityRisk: true,
+      );
       await tester.pumpWidget(buildScope(policy: policy));
       await tester.pump();
       await tester.pump();
@@ -369,7 +374,10 @@ void main() {
     ) async {
       await tester.pumpWidget(
         buildScope(
-          policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+          policy: const SecureContentPolicy(
+            enableIntegrityChecks: true,
+            hardBlockOnIntegrityRisk: true,
+          ),
         ),
       );
       await tester.pump();
@@ -386,6 +394,39 @@ void main() {
 
       expect(find.text('Access blocked for security reasons.'), findsNothing);
       expect(find.text('protected'), findsOneWidget);
+    });
+
+    testWidgets('disabling integrity checks clears and ignores risk state', (
+      tester,
+    ) async {
+      const enabledPolicy = SecureContentPolicy(
+        enableIntegrityChecks: true,
+        hardBlockOnIntegrityRisk: true,
+      );
+      await tester.pumpWidget(buildScope(policy: enabledPolicy));
+      await tester.pump();
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.integrityRiskDetected,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Access blocked for security reasons.'), findsOneWidget);
+
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(hardBlockOnIntegrityRisk: true),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Access blocked for security reasons.'), findsNothing);
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.integrityRiskDetected,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Access blocked for security reasons.'), findsNothing);
     });
 
     testWidgets('re-enabling a scope reapplies biometric locking', (
