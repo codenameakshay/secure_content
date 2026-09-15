@@ -24,6 +24,14 @@ class SecureContentService {
   int _appliedAppSwitcherColor = Colors.black.toARGB32();
   String? _appliedAppSwitcherImageName;
 
+  // Serializes _sync() calls so overlapping updateSource/removeSource calls
+  // apply in order against a consistent view of _sources, instead of racing
+  // to read/write the applied-config cache concurrently (SYNC-01). This
+  // continuation Future always resolves (errors are swallowed here so the
+  // queue keeps moving); the Future returned to each _sync() caller is
+  // separate and still carries that call's own failure.
+  Future<void> _syncQueue = Future<void>.value();
+
   Completer<SecureContentEventType>? _biometricRequest;
   StreamSubscription<SecureContentEvent>? _biometricResultSubscription;
 
@@ -138,7 +146,13 @@ class SecureContentService {
 
   Future<bool> isScreenCaptured() => _platform.isScreenCaptured();
 
-  Future<void> _sync() async {
+  Future<void> _sync() {
+    final result = _syncQueue.then((_) => _syncOnce());
+    _syncQueue = result.catchError((Object _, StackTrace _) {});
+    return result;
+  }
+
+  Future<void> _syncOnce() async {
     final activeSources = _sources.values
         .where((element) => element.enabled)
         .toList();
@@ -172,17 +186,21 @@ class SecureContentService {
       return;
     }
 
-    _appliedEnabled = enabled;
-    _appliedProtectInAppSwitcher = protectInAppSwitcher;
-    _appliedAppSwitcherColor = appSwitcherColor;
-    _appliedAppSwitcherImageName = appSwitcherImageName;
-
+    // Only commit the applied-config cache once the platform call actually
+    // succeeds (SYNC-01). If configureProtection throws, the cache stays at
+    // its last known-good value so the next _sync() call sees a diff again
+    // and retries, instead of silently believing a failed call succeeded.
     await _platform.configureProtection(
       enabled: enabled,
       protectInAppSwitcher: protectInAppSwitcher,
       appSwitcherColor: appSwitcherColor,
       appSwitcherImageName: appSwitcherImageName,
     );
+
+    _appliedEnabled = enabled;
+    _appliedProtectInAppSwitcher = protectInAppSwitcher;
+    _appliedAppSwitcherColor = appSwitcherColor;
+    _appliedAppSwitcherImageName = appSwitcherImageName;
   }
 
   void dispose() {
