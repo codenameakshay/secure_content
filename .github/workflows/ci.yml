@@ -21,11 +21,14 @@ jobs:
           flutter-version: '3.44.3'
           channel: stable
           cache: true
-      - run: flutter pub get
-      - run: flutter pub get
+      - run: dart pub global activate fvm
+      - run: echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+      - run: fvm install
+      - run: fvm flutter pub get
+      - run: fvm flutter pub get
         working-directory: example
-      - run: make FLUTTER=flutter DART=dart check
-      - run: flutter build apk --debug
+      - run: make check
+      - run: fvm flutter build apk --debug
         working-directory: example
 
   ios:
@@ -37,8 +40,11 @@ jobs:
           flutter-version: '3.44.3'
           channel: stable
           cache: true
-      - run: flutter pub get
-      - run: flutter pub get
+      - run: dart pub global activate fvm
+      - run: echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+      - run: fvm install
+      - run: fvm flutter pub get
+      - run: fvm flutter pub get
         working-directory: example
-      - run: flutter build ios --simulator --no-codesign
+      - run: fvm flutter build ios --simulator --no-codesign
         working-directory: example
