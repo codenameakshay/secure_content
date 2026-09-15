@@ -174,6 +174,8 @@ Key event types include:
 ## Notes
 
 - Android screenshot callback requires Android 14+.
+- Visual capture protection does not mute audio in a screen recording. Mute
+  audio separately in the recording or media layer.
 - Android system clipboard "Copied to clipboard" toast is controlled by the OS and cannot be disabled by apps.
 - Integrity checks are heuristic signals, not a guaranteed anti-tamper boundary.
 
