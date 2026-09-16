@@ -1,3 +1,15 @@
+## 2.1.0
+
+- Added an explicit biometric-unavailable state: the default lock screen now explains that biometrics can't be used and offers a "Try again" action. The screen stays locked until authentication succeeds.
+- Removed the unused `SecureContentPolicy.clipboardClearAfter` field. It never had an effect. Pass `clearAfter` to `setSensitiveClipboard` instead.
+- Fixed biometric handling: results now match the request that started them, the initial lock applies synchronously, the lifecycle state stays consistent, and `requireBiometricOnResume` and the integrity policy are honored.
+- Fixed Android: modern emulator fingerprints are detected, AndroidX biometrics are tried on API 23–27, the navigation bar color is restored when protection turns off, activity state is tracked correctly, and event timestamps given as epoch values now parse correctly.
+- Fixed iOS: the privacy overlay covers the windows of every scene, and `appSwitcherProtected` is emitted only after the overlay is installed.
+- Fixed the sensitive clipboard: it is cleared only if its value hasn't changed since it was set.
+- Fixed the default lock screen so it is fully opaque.
+- Fixed state handling: a disabled scope skips integrity checks and hard block, `platformReady` is emitted after Dart subscribes, an `onEvent` exception no longer interrupts internal event handling, a disposed controller does nothing, service syncs run one at a time, and app-switcher color and image come only from sources that opted in.
+- Updated the documentation for protection boundaries, recording audio, the Android app switcher, iOS screenshot detection limits, and Swift Package Manager.
+
 ## 2.0.0
 
 - Breaking: redesigned the package around `SecureContentScope`, typed events, and controller-driven global protection, replacing the legacy `SecureWidget`/`RouteAwareState` API.
