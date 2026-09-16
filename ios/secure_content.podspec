@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'secure_content'
-  s.version          = '2.0.0'
+  s.version          = '2.1.0'
   s.summary          = 'Protect Flutter screens on Android and iOS.'
   s.description      = <<-DESC
 Secure content protection primitives for Flutter with screenshot/recording awareness and app switcher obscuring support.
