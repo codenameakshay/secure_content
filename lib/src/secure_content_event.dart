@@ -92,9 +92,18 @@ class SecureContentEvent {
     }
 
     final epochMilliseconds = int.tryParse(value);
-    if (epochMilliseconds == null) {
+    if (epochMilliseconds == null ||
+        epochMilliseconds < -8640000000000000 ||
+        epochMilliseconds > 8640000000000000) {
       return null;
     }
-    return DateTime.fromMillisecondsSinceEpoch(epochMilliseconds, isUtc: true);
+    try {
+      return DateTime.fromMillisecondsSinceEpoch(
+        epochMilliseconds,
+        isUtc: true,
+      );
+    } on ArgumentError {
+      return null;
+    }
   }
 }

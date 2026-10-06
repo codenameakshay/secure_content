@@ -61,10 +61,40 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ## Installation
 
+Requires Flutter 3.44+, Dart 3.11+, Android API 23+, and iOS 13+.
+iOS builds require a Swift 6 compiler (Xcode 16 or newer).
+Android host apps must compile against SDK 37 or later. The example uses AGP 9.3.3.
+The example and CI use Flutter 3.47.4, which requires iOS 15+. See the
+[native toolchain](docs/native-toolchain.md) for compiler versions and compatibility.
+AndroidX Core is constrained to 1.17.0 because newer releases remove the
+fingerprint implementation required by stable Biometric on Android 23–27.
+
 ```yaml
 dependencies:
   secure_content: ^2.1.0
 ```
+
+For Face ID authentication, add a usage description to the host app's
+`ios/Runner/Info.plist`:
+
+```xml
+<key>NSFaceIDUsageDescription</key>
+<string>Authenticate to access protected content.</string>
+```
+
+For biometric authentication on Android 23–27, the host activity must extend
+`FlutterFragmentActivity`. The example uses this activity on all Android versions:
+
+```kotlin
+import io.flutter.embedding.android.FlutterFragmentActivity
+
+class MainActivity : FlutterFragmentActivity()
+```
+
+On Android 23–27, the activity theme must also inherit from
+`Theme.AppCompat.DayNight.NoActionBar` or another AppCompat theme. Set this parent
+for `LaunchTheme` and `NormalTheme` in both `values/styles.xml` and
+`values-night/styles.xml`. The example includes these themes.
 
 ## Quick Start
 
@@ -98,6 +128,11 @@ watermark to its `child`. When the scope is enabled, it also enables native
 capture protection for the current app window. Native protection is not
 limited to the scope's `child`.
 
+While a scope is locked or hard-blocked, its child cannot receive focus,
+pointer input, or accessibility actions. Its accessibility content is hidden
+until access is restored. Custom lock and hard-block builders must paint an
+opaque cover that fills the scope.
+
 ## App Switcher Branding (iOS)
 
 On iOS, when the app moves to the background, the multitasking snapshot and
@@ -116,6 +151,9 @@ SecureContentScope(
   child: const YourSensitiveWidget(),
 )
 ```
+
+The native iOS privacy cover always uses an opaque background. The alpha
+component of `appSwitcherColor` does not make protected content visible.
 
 > Note: `appSwitcherImageName` is iOS-only. Android uses `FLAG_SECURE` for
 > capture and app-switcher protection. When `protectInAppSwitcher` is true,
@@ -140,6 +178,15 @@ await SecureContent.setSensitiveClipboard(
   clearAfter: const Duration(seconds: 10),
 );
 ```
+
+iOS uses system pasteboard expiration and keeps sensitive copies local to the
+device. Automatic cleanup preserves newer clipboard entries, including a new
+copy of the same text. A zero or negative `clearAfter` disables automatic expiry.
+
+Android restricts clipboard access while an app is in the background. If cleanup
+cannot access the clipboard, it remains pending until the app can access it
+again. The requested TTL is not a guaranteed background deletion deadline on
+Android. Process termination can also prevent app-scheduled cleanup.
 
 ## Events
 
@@ -185,9 +232,8 @@ Key event types include:
   audio separately in the recording or media layer.
 - Android system clipboard "Copied to clipboard" toast is controlled by the OS and cannot be disabled by apps.
 - Integrity checks are heuristic signals, not a guaranteed anti-tamper boundary.
-- The iOS example keeps CocoaPods integration. Flutter 3.44.3 builds with a
-  warning that asks you to remove the CocoaPods integration after all plugins
-  use Swift Package Manager. The warning does not block the current build.
+- The iOS plugin supports CocoaPods and Swift Package Manager. Its native
+  window integration uses UIKit; it does not require SwiftUI.
 
 ## Example
 

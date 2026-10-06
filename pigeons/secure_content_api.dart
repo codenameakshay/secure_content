@@ -56,5 +56,6 @@ abstract class SecureContentHostApi {
 
 @FlutterApi()
 abstract class SecureContentFlutterApi {
+  @asyncCallback
   void onEvent(SecureEvent event);
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secure_content/src/secure_content_event.dart';
@@ -68,6 +70,37 @@ void main() {
       final second = service.requestBiometricAuth('reason');
       service.emitLocalEvent(SecureContentEventType.biometricUnavailable);
       expect(await second, SecureContentEventType.biometricUnavailable);
+    },
+  );
+
+  test(
+    'a late native error cannot complete the next biometric request',
+    () async {
+      final nativeReplies = <Completer<ByteData?>>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMessageHandler('$channelPrefix.requestBiometricAuth', (
+        ByteData? _,
+      ) {
+        final reply = Completer<ByteData?>();
+        nativeReplies.add(reply);
+        return reply.future;
+      });
+
+      final service = SecureContentService.instance;
+      final first = service.requestBiometricAuth('first');
+      service.emitLocalEvent(SecureContentEventType.biometricAuthSucceeded);
+      expect(await first, SecureContentEventType.biometricAuthSucceeded);
+
+      final second = service.requestBiometricAuth('second');
+      nativeReplies.first.complete(
+        codec.encodeMessage(<Object?>['native-error', 'late error', null]),
+      );
+      await Future<void>.delayed(Duration.zero);
+      service.emitLocalEvent(SecureContentEventType.biometricAuthSucceeded);
+
+      expect(await second, SecureContentEventType.biometricAuthSucceeded);
+      expect(nativeReplies, hasLength(2));
     },
   );
 

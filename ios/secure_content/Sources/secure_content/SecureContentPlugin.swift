@@ -1,322 +1,80 @@
 import Flutter
-import LocalAuthentication
 import UIKit
-import Darwin
 
-public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi {
-  private var flutterApi: SecureContentFlutterApi?
+@MainActor
+public final class SecureContentPlugin: NSObject, @preconcurrency FlutterPlugin,
+  @preconcurrency SecureContentHostApi
+{
+  private let runtime: SecureContentRuntime
 
-  private var secureEnabled = false
-  private var protectInAppSwitcher = true
-  private var appSwitcherColor: UIColor = .black
-  private var appSwitcherImageName: String?
-  private var platformReadyEmitted = false
+  public override init() {
+    MainActor.preconditionIsolated()
+    runtime = SecureContentRuntime()
+    super.init()
+  }
 
-  private let captureOverlayTag = 991001
-  private let appSwitcherOverlayTag = 991002
-  private var clipboardClearWorkItem: DispatchWorkItem?
-  private var lastSensitiveClipboardContent: String?
+  init(
+    windowProvider: (() -> [UIWindow])?,
+    sceneActivationProvider: ((UIWindow) -> Bool)?
+  ) {
+    MainActor.preconditionIsolated()
+    runtime = SecureContentRuntime(
+      windowProvider: windowProvider,
+      sceneActivationProvider: sceneActivationProvider
+    )
+    super.init()
+  }
 
   public static func register(with registrar: FlutterPluginRegistrar) {
+    MainActor.preconditionIsolated()
     let instance = SecureContentPlugin()
-    instance.flutterApi = SecureContentFlutterApi(binaryMessenger: registrar.messenger())
-
+    instance.runtime.connect(binaryMessenger: registrar.messenger())
     SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
-    instance.setupObservers()
+    registrar.publish(instance)
   }
 
   deinit {
-    NotificationCenter.default.removeObserver(self)
+    let runtime = runtime
+    if Thread.isMainThread {
+      MainActor.assumeIsolated { runtime.dispose() }
+    } else {
+      DispatchQueue.main.async { runtime.dispose() }
+    }
+  }
+
+  public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    MainActor.preconditionIsolated()
+    SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
+    runtime.dispose()
   }
 
   func configureProtection(config: ProtectionConfig) throws {
-    secureEnabled = config.enabled
-    protectInAppSwitcher = config.protectInAppSwitcher
-    appSwitcherColor = Self.color(from: config.appSwitcherColor)
-    appSwitcherImageName = config.appSwitcherImageName
-
-    applyProtectionState()
-    emitPlatformReadyOnce()
+    MainActor.preconditionIsolated()
+    runtime.configureProtection(config: config)
   }
 
   func isScreenCaptured() throws -> Bool {
-    return UIScreen.main.isCaptured
+    MainActor.preconditionIsolated()
+    return runtime.isScreenCaptured
   }
 
   func requestBiometricAuth(reason: String) throws {
-    let context = LAContext()
-    var error: NSError?
-
-    guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-      emit(type: "biometricUnavailable")
-      return
-    }
-
-    let localizedReason = reason.isEmpty ? "Authenticate" : reason
-    context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: localizedReason) {
-      [weak self] success, _ in
-      DispatchQueue.main.async {
-        self?.emit(type: success ? "biometricAuthSucceeded" : "biometricAuthFailed")
-      }
-    }
+    MainActor.preconditionIsolated()
+    runtime.requestBiometricAuth(reason: reason)
   }
 
   func checkIntegrity() throws {
-    let riskDetected = isJailbroken() || isDebuggerAttached() || isRunningOnSimulator()
-    emit(type: riskDetected ? "integrityRiskDetected" : "integritySafe")
+    MainActor.preconditionIsolated()
+    runtime.checkIntegrity()
   }
 
   func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws {
-    UIPasteboard.general.string = content
-    lastSensitiveClipboardContent = content
-    emit(type: "clipboardSet")
-
-    clipboardClearWorkItem?.cancel()
-    clipboardClearWorkItem = nil
-
-    guard clearAfterMs > 0 else {
-      return
-    }
-
-    let workItem = DispatchWorkItem { [weak self] in
-      try? self?.clearSensitiveClipboard()
-    }
-    clipboardClearWorkItem = workItem
-    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(clearAfterMs)), execute: workItem)
+    MainActor.preconditionIsolated()
+    runtime.setSensitiveClipboard(content: content, clearAfterMs: clearAfterMs)
   }
 
   func clearSensitiveClipboard() throws {
-    if let expected = lastSensitiveClipboardContent, UIPasteboard.general.string == expected {
-      UIPasteboard.general.string = ""
-    }
-    lastSensitiveClipboardContent = nil
-    clipboardClearWorkItem?.cancel()
-    clipboardClearWorkItem = nil
-    emit(type: "clipboardCleared")
-  }
-
-  private func setupObservers() {
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(handleScreenshot),
-      name: UIApplication.userDidTakeScreenshotNotification,
-      object: nil
-    )
-
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(handleCaptureStateChange),
-      name: UIScreen.capturedDidChangeNotification,
-      object: nil
-    )
-
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(handleAppWillResignActive),
-      name: UIApplication.willResignActiveNotification,
-      object: nil
-    )
-
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(handleAppDidBecomeActive),
-      name: UIApplication.didBecomeActiveNotification,
-      object: nil
-    )
-  }
-
-  private func applyProtectionState() {
-    if !secureEnabled {
-      hideOverlay(tag: captureOverlayTag)
-      hideOverlay(tag: appSwitcherOverlayTag)
-      return
-    }
-
-    if UIScreen.main.isCaptured {
-      showOverlay(tag: captureOverlayTag, color: .black)
-    } else {
-      hideOverlay(tag: captureOverlayTag)
-    }
-  }
-
-  private func emitPlatformReadyOnce() {
-    guard !platformReadyEmitted else { return }
-    platformReadyEmitted = true
-    emit(type: "platformReady")
-  }
-
-  @objc private func handleScreenshot() {
-    guard secureEnabled else { return }
-    emit(type: "screenshotCaptured")
-  }
-
-  @objc private func handleCaptureStateChange() {
-    let isCaptured = UIScreen.main.isCaptured
-
-    if secureEnabled {
-      if isCaptured {
-        showOverlay(tag: captureOverlayTag, color: .black)
-      } else {
-        hideOverlay(tag: captureOverlayTag)
-      }
-    }
-
-    emit(type: isCaptured ? "recordingStarted" : "recordingStopped")
-  }
-
-  @objc private func handleAppWillResignActive() {
-    guard secureEnabled && protectInAppSwitcher else { return }
-    let installed = showOverlay(tag: appSwitcherOverlayTag, color: appSwitcherColor, imageName: appSwitcherImageName)
-    if installed {
-      emit(type: "appSwitcherProtected")
-    }
-  }
-
-  @objc private func handleAppDidBecomeActive() {
-    hideOverlay(tag: appSwitcherOverlayTag)
-    if secureEnabled {
-      emit(type: "appSwitcherUnprotected")
-    }
-  }
-
-  // Installs (or removes) the privacy overlay on every window of every
-  // connected scene, not just the key window, so multi-window/multi-scene
-  // apps (iPad Split View, Stage Manager, multiple UIWindowScenes) stay
-  // covered. On a single-scene app this is exactly the same window set as
-  // before.
-  @discardableResult
-  private func showOverlay(tag: Int, color: UIColor, imageName: String? = nil) -> Bool {
-    let windows = allWindows()
-    guard !windows.isEmpty else { return false }
-
-    for window in windows {
-      installOverlay(in: window, tag: tag, color: color, imageName: imageName)
-    }
-    return true
-  }
-
-  private func installOverlay(in window: UIWindow, tag: Int, color: UIColor, imageName: String?) {
-    if let existing = window.viewWithTag(tag) {
-      existing.backgroundColor = color
-      existing.isHidden = false
-      window.bringSubviewToFront(existing)
-      return
-    }
-
-    let overlay = UIView(frame: window.bounds)
-    overlay.tag = tag
-    overlay.backgroundColor = color
-    overlay.isUserInteractionEnabled = false
-    overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-
-    // Brand the privacy cover: center a white-tinted template logo so the app
-    // switcher / Face ID moment reads as "secured", not "broken / black".
-    if let name = imageName, let raw = UIImage(named: name) {
-      let imageView = UIImageView(image: raw.withRenderingMode(.alwaysTemplate))
-      imageView.tintColor = .white
-      imageView.contentMode = .scaleAspectFit
-      imageView.translatesAutoresizingMaskIntoConstraints = false
-      overlay.addSubview(imageView)
-
-      let shorterSide = min(window.bounds.width, window.bounds.height)
-      let logoWidth = max(96, min(160, shorterSide * 0.28))
-      let aspect = raw.size.width > 0 ? raw.size.height / raw.size.width : 1
-      NSLayoutConstraint.activate([
-        imageView.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-        imageView.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
-        imageView.widthAnchor.constraint(equalToConstant: logoWidth),
-        imageView.heightAnchor.constraint(equalTo: imageView.widthAnchor, multiplier: aspect),
-      ])
-    }
-
-    window.addSubview(overlay)
-  }
-
-  private func hideOverlay(tag: Int) {
-    for window in allWindows() {
-      window.viewWithTag(tag)?.removeFromSuperview()
-    }
-  }
-
-  private func allWindows() -> [UIWindow] {
-    if #available(iOS 13.0, *) {
-      return UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }
-        .flatMap { $0.windows }
-    }
-
-    return UIApplication.shared.windows
-  }
-
-  private func emit(type: String) {
-    let event = SecureEvent(
-      type: type,
-      platform: "ios",
-      timestamp: ISO8601DateFormatter().string(from: Date())
-    )
-
-    flutterApi?.onEvent(event: event) { _ in }
-  }
-
-  private func isRunningOnSimulator() -> Bool {
-    #if targetEnvironment(simulator)
-      return true
-    #else
-      return false
-    #endif
-  }
-
-  private func isJailbroken() -> Bool {
-    #if targetEnvironment(simulator)
-      return false
-    #else
-      let suspiciousPaths = [
-        "/Applications/Cydia.app",
-        "/Library/MobileSubstrate/MobileSubstrate.dylib",
-        "/bin/bash",
-        "/usr/sbin/sshd",
-        "/etc/apt",
-        "/private/var/lib/apt/",
-      ]
-
-      if suspiciousPaths.contains(where: { FileManager.default.fileExists(atPath: $0) }) {
-        return true
-      }
-
-      let testPath = "/private/secure_content_jb_test.txt"
-      do {
-        try "test".write(toFile: testPath, atomically: true, encoding: .utf8)
-        try FileManager.default.removeItem(atPath: testPath)
-        return true
-      } catch {
-        return false
-      }
-    #endif
-  }
-
-  private func isDebuggerAttached() -> Bool {
-    var info = kinfo_proc()
-    var size = MemoryLayout<kinfo_proc>.stride
-    var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
-
-    let result = name.withUnsafeMutableBufferPointer { pointer in
-      sysctl(pointer.baseAddress, 4, &info, &size, nil, 0)
-    }
-
-    if result != 0 {
-      return false
-    }
-
-    return (info.kp_proc.p_flag & P_TRACED) != 0
-  }
-
-  private static func color(from argb: Int64) -> UIColor {
-    let value = UInt32(truncatingIfNeeded: argb)
-    let alpha = CGFloat((value >> 24) & 0xff) / 255.0
-    let red = CGFloat((value >> 16) & 0xff) / 255.0
-    let green = CGFloat((value >> 8) & 0xff) / 255.0
-    let blue = CGFloat(value & 0xff) / 255.0
-
-    return UIColor(red: red, green: green, blue: blue, alpha: alpha)
+    MainActor.preconditionIsolated()
+    runtime.clearSensitiveClipboard()
   }
 }
