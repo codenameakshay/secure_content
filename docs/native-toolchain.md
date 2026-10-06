@@ -69,6 +69,12 @@ local run and cannot verify the API 37 regression. The CI job uses Linux x86-64
 and runs the unfiltered suite with JDK 25. No repository-level OS exception
 disables that test.
 
+The unit-test JVM exports `java.base/jdk.internal.access` to unnamed modules.
+Robolectric 4.17 uses `SharedSecrets.getJavaIOFileDescriptorAccess()` when
+API 37 initializes application shared memory. Without that narrow export,
+the test environment fails with `IllegalAccessException` before the test runs.
+The export applies only to forked unit-test JVMs and preserves API 37 coverage.
+
 Local verification on 2026-10-06 built the example debug APK with Flutter
 3.47.4, AGP 9.3.3, Gradle 9.7.0, Kotlin 2.4.20, compile SDK 37, and JDK 25.
 The filtered JVM run passed 48 tests with zero failures; Android lint reported
