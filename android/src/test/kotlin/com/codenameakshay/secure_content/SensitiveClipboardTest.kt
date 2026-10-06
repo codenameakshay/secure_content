@@ -247,7 +247,9 @@ class SensitiveClipboardTest {
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertEquals("secret", clipboard.primaryClip!!.getItemAt(0).text)
-        assertTrue(ReflectionHelpers.getField(plugin, "clipboardClearRunnable") != null)
+        assertTrue(
+            ReflectionHelpers.getField<Runnable?>(plugin, "clipboardClearRunnable") != null,
+        )
     }
 
     private fun plugin(): SecureContentPlugin = SecureContentPlugin().also {
