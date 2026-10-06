@@ -433,7 +433,7 @@ class SecureContentHostApiSetup {
 
 /// Generated protocol from Pigeon that represents Flutter messages that can be called from Swift.
 protocol SecureContentFlutterApiProtocol {
-  func onEvent(event eventArg: SecureEvent, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onEvent(event eventArg: SecureEvent, completion: @escaping @Sendable (Result<Void, PigeonError>) -> Void)
 }
 class SecureContentFlutterApi: SecureContentFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -445,7 +445,7 @@ class SecureContentFlutterApi: SecureContentFlutterApiProtocol {
   var codec: SecureContentApiPigeonCodec {
     return SecureContentApiPigeonCodec.shared
   }
-  func onEvent(event eventArg: SecureEvent, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+  func onEvent(event eventArg: SecureEvent, completion: @escaping @Sendable (Result<Void, PigeonError>) -> Void) {
     let channelName: String = "dev.flutter.pigeon.secure_content.SecureContentFlutterApi.onEvent\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage([eventArg] as [Any?]) { response in

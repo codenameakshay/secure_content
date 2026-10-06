@@ -1,28 +1,26 @@
 import LocalAuthentication
-import Testing
+import XCTest
 
 @testable import secure_content
 
 @MainActor
-struct SecureContentAuthenticationTests {
-  @Test
-  func duplicateTerminalCallbacksEmitOnce() async {
+final class SecureContentAuthenticationTests: XCTestCase {
+  func testDuplicateTerminalCallbacksEmitOnce() {
     let context = ControlledAuthenticationContext()
     let authentication = SecureContentAuthentication(contextProvider: { context })
     var events: [SecureContentEventType] = []
     authentication.request(reason: "") { events.append($0) }
-    #expect(context.reason == "Authenticate")
+    XCTAssertEqual(context.reason, "Authenticate")
 
     context.complete(success: true)
     context.complete(success: false)
-    await drainMainQueue()
+    drainMainQueue()
 
-    #expect(events == [.biometricAuthSucceeded])
-    #expect(authentication.context == nil)
+    XCTAssertEqual(events, [.biometricAuthSucceeded])
+    XCTAssertNil(authentication.context)
   }
 
-  @Test
-  func cancelledAndReplacedRequestsCannotUnlock() async {
+  func testCancelledAndReplacedRequestsCannotUnlock() {
     let first = ControlledAuthenticationContext()
     let second = ControlledAuthenticationContext()
     var nextContext: LAContext = first
@@ -31,38 +29,40 @@ struct SecureContentAuthenticationTests {
     authentication.request(reason: "First") { events.append($0) }
     nextContext = second
     authentication.request(reason: "Second") { events.append($0) }
-    #expect(first.invalidationCount == 1)
+    XCTAssertEqual(first.invalidationCount, 1)
 
     first.complete(success: true)
-    await drainMainQueue()
-    #expect(events.isEmpty)
-    #expect(authentication.context === second)
+    drainMainQueue()
+    XCTAssertTrue(events.isEmpty)
+    XCTAssertTrue(authentication.context === second)
 
     authentication.cancel()
     second.complete(success: true)
-    await drainMainQueue()
-    #expect(events.isEmpty)
-    #expect(authentication.context == nil)
-    #expect(second.invalidationCount == 1)
+    drainMainQueue()
+    XCTAssertTrue(events.isEmpty)
+    XCTAssertNil(authentication.context)
+    XCTAssertEqual(second.invalidationCount, 1)
   }
 
-  private func drainMainQueue() async {
-    await withCheckedContinuation { continuation in
-      DispatchQueue.main.async { continuation.resume() }
-    }
+  private func drainMainQueue() {
+    let drained = expectation(description: "Authentication callbacks drained")
+    DispatchQueue.main.async { drained.fulfill() }
+    wait(for: [drained], timeout: 2)
   }
 }
 
 final class ControlledAuthenticationContext: LAContext {
-  @MainActor private var reply: ((Bool, Error?) -> Void)?
-  @MainActor private(set) var reason: String?
-  @MainActor private(set) var invalidationCount = 0
+  private let lock = NSLock()
+  private var reply: ((Bool, Error?) -> Void)?
+  private var storedReason: String?
+  private var storedInvalidationCount = 0
+
+  var reason: String? { lock.withLock { storedReason } }
+  var invalidationCount: Int { lock.withLock { storedInvalidationCount } }
 
   override func canEvaluatePolicy(_ policy: LAPolicy, error: NSErrorPointer) -> Bool {
-    MainActor.assumeIsolated {
-      if invalidationCount > 0 { return super.canEvaluatePolicy(policy, error: error) }
-      return true
-    }
+    if invalidationCount > 0 { return super.canEvaluatePolicy(policy, error: error) }
+    return true
   }
 
   override func evaluatePolicy(
@@ -70,19 +70,20 @@ final class ControlledAuthenticationContext: LAContext {
     localizedReason: String,
     reply: @escaping (Bool, Error?) -> Void
   ) {
-    MainActor.assumeIsolated {
-      reason = localizedReason
+    lock.withLock {
+      storedReason = localizedReason
       self.reply = reply
     }
   }
 
   override func invalidate() {
-    MainActor.assumeIsolated { invalidationCount += 1 }
+    lock.withLock { storedInvalidationCount += 1 }
     super.invalidate()
   }
 
   @MainActor
   func complete(success: Bool) {
-    reply?(success, nil)
+    let callback = lock.withLock { reply }
+    callback?(success, nil)
   }
 }

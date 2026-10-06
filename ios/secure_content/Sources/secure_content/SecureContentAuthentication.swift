@@ -27,7 +27,7 @@ final class SecureContentAuthentication {
       .deviceOwnerAuthentication,
       localizedReason: reason.isEmpty ? "Authenticate" : reason
     ) { [weak self] success, _ in
-      DispatchQueue.main.async {
+      DispatchQueue.main.async { [weak self] in
         guard let self, self.generation == requestGeneration, self.context != nil else { return }
         self.generation &+= 1
         self.context = nil

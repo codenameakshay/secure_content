@@ -65,6 +65,5 @@ print(selected)
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "$package_dir/DerivedData" \
   -parallel-testing-enabled NO \
-  -retry-tests-on-failure NO \
   -resultBundlePath "$result_bundle" \
   CODE_SIGNING_ALLOWED=NO)

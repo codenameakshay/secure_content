@@ -1,19 +1,23 @@
 import Flutter
 import UIKit
 
-public final class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi {
+@MainActor
+public final class SecureContentPlugin: NSObject, @preconcurrency FlutterPlugin,
+  @preconcurrency SecureContentHostApi
+{
   private let runtime: SecureContentRuntime
 
   public override init() {
-    runtime = MainActor.assumeIsolated { SecureContentRuntime() }
+    MainActor.preconditionIsolated()
+    runtime = SecureContentRuntime()
     super.init()
   }
 
-  @MainActor
   init(
     windowProvider: (() -> [UIWindow])?,
     sceneActivationProvider: ((UIWindow) -> Bool)?
   ) {
+    MainActor.preconditionIsolated()
     runtime = SecureContentRuntime(
       windowProvider: windowProvider,
       sceneActivationProvider: sceneActivationProvider
@@ -22,12 +26,11 @@ public final class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHo
   }
 
   public static func register(with registrar: FlutterPluginRegistrar) {
-    MainActor.assumeIsolated {
-      let instance = SecureContentPlugin()
-      instance.runtime.connect(binaryMessenger: registrar.messenger())
-      SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
-      registrar.publish(instance)
-    }
+    MainActor.preconditionIsolated()
+    let instance = SecureContentPlugin()
+    instance.runtime.connect(binaryMessenger: registrar.messenger())
+    SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
+    registrar.publish(instance)
   }
 
   deinit {
@@ -40,36 +43,38 @@ public final class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHo
   }
 
   public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
-    MainActor.assumeIsolated {
-      SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
-      runtime.dispose()
-    }
+    MainActor.preconditionIsolated()
+    SecureContentHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
+    runtime.dispose()
   }
 
   func configureProtection(config: ProtectionConfig) throws {
-    MainActor.assumeIsolated { runtime.configureProtection(config: config) }
+    MainActor.preconditionIsolated()
+    runtime.configureProtection(config: config)
   }
 
   func isScreenCaptured() throws -> Bool {
-    MainActor.assumeIsolated { runtime.isScreenCaptured }
+    MainActor.preconditionIsolated()
+    return runtime.isScreenCaptured
   }
 
   func requestBiometricAuth(reason: String) throws {
-    MainActor.assumeIsolated { runtime.requestBiometricAuth(reason: reason) }
+    MainActor.preconditionIsolated()
+    runtime.requestBiometricAuth(reason: reason)
   }
 
   func checkIntegrity() throws {
-    MainActor.assumeIsolated { runtime.checkIntegrity() }
+    MainActor.preconditionIsolated()
+    runtime.checkIntegrity()
   }
 
   func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws {
-    MainActor.assumeIsolated {
-      runtime.setSensitiveClipboard(content: content, clearAfterMs: clearAfterMs)
-    }
+    MainActor.preconditionIsolated()
+    runtime.setSensitiveClipboard(content: content, clearAfterMs: clearAfterMs)
   }
 
   func clearSensitiveClipboard() throws {
-    MainActor.assumeIsolated { runtime.clearSensitiveClipboard() }
+    MainActor.preconditionIsolated()
+    runtime.clearSensitiveClipboard()
   }
-
 }

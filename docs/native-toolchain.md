@@ -89,6 +89,20 @@ The example and runtime-test package use iOS 15, matching Flutter 3.47's
 deployment minimum. The library's iOS 13 API availability is retained for
 consumers on earlier supported Flutter versions.
 
+Pigeon 29.0.6 generates a non-Sendable Swift event completion, although Flutter's
+binary reply is Sendable. `make pigeon` and `make pigeon-check` both use
+`tool/generate_pigeon.dart`: it regenerates all bindings, adds `@Sendable` only
+to the two native `onEvent` completion declarations, then formats generated Dart.
+An exact two-match guard fails when upstream output changes. This preserves
+callback dispatch and ordering without modifying the generator installation.
+
+The Swift plugin is isolated to the main actor. Its preconcurrency conformances
+bridge Flutter and Pigeon's unannotated synchronous protocols; explicit
+`MainActor.preconditionIsolated()` guards also enforce the boundary in Swift 5
+language mode, which does not insert Swift 6's executor checks. The guard is
+back-deployed to iOS 13. Building this native implementation requires a Swift 6
+compiler; selecting language mode 5 preserves API and deployment compatibility.
+
 Sources:
 
 - [Flutter 3.47.4 Android defaults](https://github.com/flutter/flutter/blob/3.47.4/packages/flutter_tools/lib/src/android/gradle_utils.dart)

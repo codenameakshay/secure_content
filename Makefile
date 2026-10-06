@@ -56,13 +56,10 @@ example-test: ## Run example app tests
 
 .PHONY: pigeon
 pigeon: ## Regenerate pigeon platform-channel code
-	$(DART) run pigeon --input $(PIGEON)
-	$(DART) format .
+	$(DART) run tool/generate_pigeon.dart $(PIGEON)
 
 .PHONY: pigeon-check
-pigeon-check: ## Verify generated platform bindings match the schema
-	$(DART) run pigeon --input $(PIGEON)
-	$(DART) format lib/src/pigeon/secure_content_api.g.dart
+pigeon-check: pigeon ## Verify generated platform bindings match the schema
 	git diff --exit-code -- lib/src/pigeon/secure_content_api.g.dart android/src/main/kotlin/com/codenameakshay/secure_content/pigeon/SecureContentApi.g.kt ios/secure_content/Sources/secure_content/SecureContentApi.g.swift
 
 .PHONY: android-test
