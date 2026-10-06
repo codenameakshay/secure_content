@@ -1,93 +1,102 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import SecureContentNativePolicies
 
-final class SecureContentNativePolicyTests: XCTestCase {
-  func testClipboardOwnershipDoesNotClearAReplacementWithSameText() {
+struct SecureContentNativePolicyTests {
+  @Test
+  func replacedClipboardWithIdenticalContentIsNotOwnedOrRead() {
     var ownership = SensitiveClipboardOwnership()
     ownership.record(content: "one-time code", changeCount: 10)
     var clipboardReads = 0
 
-    XCTAssertTrue(
-      ownership.ownsClipboard(currentChangeCount: 10) {
-        clipboardReads += 1
-        return "one-time code"
-      }
-    )
-    XCTAssertFalse(
-      ownership.ownsClipboard(currentChangeCount: 11) {
-        clipboardReads += 1
-        return "one-time code"
-      }
-    )
-    XCTAssertEqual(clipboardReads, 1, "A replaced clipboard should not be read.")
-    XCTAssertFalse(
-      ownership.ownsClipboard(currentChangeCount: 10) {
-        clipboardReads += 1
-        return "different"
-      }
-    )
+    #expect(ownership.ownsClipboard(currentChangeCount: 10) {
+      clipboardReads += 1
+      return "one-time code"
+    })
+    #expect(!ownership.ownsClipboard(currentChangeCount: 11) {
+      clipboardReads += 1
+      return "one-time code"
+    })
+    #expect(clipboardReads == 1)
+    #expect(!ownership.ownsClipboard(currentChangeCount: 10) { "different" })
 
     ownership.clear()
-    XCTAssertFalse(ownership.ownsClipboard(currentChangeCount: 10) { "one-time code" })
+    #expect(!ownership.ownsClipboard(currentChangeCount: 10) { "one-time code" })
   }
 
-  func testClipboardDispatchDelayIsBoundedForVeryLongExpiration() {
+  @Test(arguments: [
+    (Double(Int64.max), 3_600_000),
+    (3_600.001, 3_600_000),
+    (0.0011, 2),
+    (0.0001, 1),
+    (0, 1),
+    (-1, 1),
+  ])
+  func clipboardDispatchDelayIsBoundedAndRoundsUp(seconds: Double, expected: Int) {
     let now = Date(timeIntervalSince1970: 0)
-    let distantExpiration = Date(timeIntervalSince1970: Double(Int64.max))
-
-    XCTAssertEqual(
-      SecureContentNativePolicy.dispatchDelayMilliseconds(until: distantExpiration, now: now),
-      3_600_000
-    )
-    XCTAssertEqual(
-      SecureContentNativePolicy.dispatchDelayMilliseconds(until: now, now: now),
-      1
+    #expect(
+      SecureContentNativePolicy.dispatchDelayMilliseconds(
+        until: now.addingTimeInterval(seconds), now: now
+      ) == expected
     )
   }
 
-  func testAppSwitcherCoverRequiresEnabledProtectedInactiveScene() {
-    XCTAssertTrue(
+  @Test(arguments: [
+    (false, false, false), (false, false, true),
+    (false, true, false), (false, true, true),
+    (true, false, false), (true, false, true),
+    (true, true, false), (true, true, true),
+  ])
+  func appSwitcherCoverRequiresEnabledProtectedInactiveScene(
+    enabled: Bool, protected: Bool, active: Bool
+  ) {
+    #expect(
       SecureContentNativePolicy.shouldCoverAppSwitcher(
-        enabled: true,
-        protectInAppSwitcher: true,
-        sceneIsActive: false
-      )
-    )
-    XCTAssertFalse(
-      SecureContentNativePolicy.shouldCoverAppSwitcher(
-        enabled: false,
-        protectInAppSwitcher: true,
-        sceneIsActive: false
-      )
-    )
-    XCTAssertFalse(
-      SecureContentNativePolicy.shouldCoverAppSwitcher(
-        enabled: true,
-        protectInAppSwitcher: false,
-        sceneIsActive: false
-      )
-    )
-    XCTAssertFalse(
-      SecureContentNativePolicy.shouldCoverAppSwitcher(
-        enabled: true,
-        protectInAppSwitcher: true,
-        sceneIsActive: true
-      )
+        enabled: enabled, protectInAppSwitcher: protected, sceneIsActive: active
+      ) == (enabled && protected && !active)
     )
   }
 
-  func testRecordingEventsRepresentAggregateCaptureTransitionsOnly() {
-    XCTAssertEqual(
-      SecureContentNativePolicy.recordingEvent(previouslyCaptured: false, isCaptured: true),
-      "recordingStarted"
+  @Test(arguments: [
+    (false, true, SecureContentEventType.recordingStarted),
+    (true, false, SecureContentEventType.recordingStopped),
+  ])
+  func recordingEventsRepresentAggregateCaptureTransitions(
+    before: Bool, after: Bool, expected: SecureContentEventType
+  ) {
+    #expect(
+      SecureContentNativePolicy.recordingEvent(previouslyCaptured: before, isCaptured: after)
+        == expected
     )
-    XCTAssertNil(
-      SecureContentNativePolicy.recordingEvent(previouslyCaptured: true, isCaptured: true)
+    #expect(
+      SecureContentNativePolicy.recordingEvent(previouslyCaptured: before, isCaptured: before)
+        == nil
     )
-    XCTAssertEqual(
-      SecureContentNativePolicy.recordingEvent(previouslyCaptured: true, isCaptured: false),
-      "recordingStopped"
+  }
+
+  @Test(arguments: [
+    (false, true, SecureContentEventType.appSwitcherProtected),
+    (true, false, SecureContentEventType.appSwitcherUnprotected),
+  ])
+  func appSwitcherEventsOnlyReportChangedAggregateCoverage(
+    before: Bool, after: Bool, expected: SecureContentEventType
+  ) {
+    #expect(
+      SecureContentNativePolicy.appSwitcherEvent(previouslyProtected: before, isProtected: after)
+        == expected
     )
+    #expect(
+      SecureContentNativePolicy.appSwitcherEvent(previouslyProtected: before, isProtected: before)
+        == nil
+    )
+  }
+
+  @Test(arguments: [Int64(0x00123456), Int64(0xFF123456), Int64(0x1FF123456)])
+  func privacyColorIgnoresCallerAlphaAndTruncatesToARGB(argb: Int64) {
+    let color = SecureContentNativePolicy.opaqueRGB(from: argb)
+    #expect(abs(color.red - CGFloat(0x12) / 255) < 0.0001)
+    #expect(abs(color.green - CGFloat(0x34) / 255) < 0.0001)
+    #expect(abs(color.blue - CGFloat(0x56) / 255) < 0.0001)
   }
 }

@@ -9,8 +9,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [23, 30])
 class WindowProtectionStateTest {
     @Test
     fun disabledProtectionLeavesHostSecureFlagAndNavigationColorAlone() {
@@ -132,5 +134,50 @@ class WindowProtectionStateTest {
 
         assertFalse((activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0)
         assertEquals(initialColor, activity.window.navigationBarColor)
+    }
+
+    @Test
+    fun mostRecentlyUpdatedOwnerSuppliesColorUntilItDetaches() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val baselineColor = 0xff123456.toInt()
+        val firstColor = 0xff000001.toInt()
+        val secondColor = 0xff000002.toInt()
+        val updatedColor = 0xff000003.toInt()
+        activity.window.navigationBarColor = baselineColor
+        val first = WindowProtectionState()
+        val second = WindowProtectionState()
+
+        first.apply(activity.window, true, true, firstColor)
+        second.apply(activity.window, true, true, secondColor)
+        first.apply(activity.window, true, true, updatedColor)
+        assertEquals(updatedColor, activity.window.navigationBarColor)
+
+        first.restore(activity.window)
+        assertEquals(secondColor, activity.window.navigationBarColor)
+        assertTrue((activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0)
+        second.restore(activity.window)
+        assertEquals(baselineColor, activity.window.navigationBarColor)
+    }
+
+    @Test
+    @Config(sdk = [37])
+    fun latestSdkPreservesSecureFlagAcrossEngineOwnersAndRestoresTheHostBaseline() {
+        for (hostSecure in listOf(false, true)) {
+            val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+            if (hostSecure) activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            val first = WindowProtectionState()
+            val second = WindowProtectionState()
+
+            first.apply(activity.window, true, false, 0)
+            second.apply(activity.window, true, false, 0)
+            first.restore(activity.window)
+            assertTrue((activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0)
+
+            second.restore(activity.window)
+            assertEquals(
+                hostSecure,
+                (activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0,
+            )
+        }
     }
 }

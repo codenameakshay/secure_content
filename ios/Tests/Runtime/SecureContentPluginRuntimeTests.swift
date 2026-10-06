@@ -122,16 +122,92 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
   }
 
   func testDetachingAuthenticationContextInvalidatesItWithoutShowingPrompt() {
-    let plugin = SecureContentPlugin()
-    let context = LAContext()
-    plugin.activeAuthenticationContext = context
+    let context = ControlledAuthenticationContext()
+    let authentication = SecureContentAuthentication(contextProvider: { context })
+    authentication.request(reason: "test") { _ in }
 
-    plugin.cancelActiveAuthentication()
+    authentication.cancel()
 
-    XCTAssertNil(plugin.activeAuthenticationContext)
+    XCTAssertNil(authentication.context)
     var error: NSError?
     XCTAssertFalse(context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error))
     XCTAssertEqual((error as? LAError)?.code, .invalidContext)
+  }
+
+  func testLifecycleCoversAllWindowsAndKeepsInactiveScenesCoveredOnActivation() {
+    let first = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+    let second = UIWindow(frame: first.frame)
+    let runtime = SecureContentRuntime(
+      windowProvider: { [first, second] },
+      sceneActivationProvider: { $0 === first }
+    )
+    runtime.setupObservers()
+    runtime.configureProtection(config: config(color: 0xFF000000, image: nil))
+    XCTAssertTrue(switcherCovers(in: first).isEmpty)
+    XCTAssertEqual(switcherCovers(in: second).count, 1)
+
+    NotificationCenter.default.post(name: UIApplication.willResignActiveNotification, object: nil)
+    XCTAssertEqual(switcherCovers(in: first).count, 1)
+    XCTAssertEqual(switcherCovers(in: second).count, 1)
+    NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+    XCTAssertTrue(switcherCovers(in: first).isEmpty)
+    XCTAssertEqual(switcherCovers(in: second).count, 1)
+
+    runtime.dispose()
+    XCTAssertTrue(switcherCovers(in: second).isEmpty)
+  }
+
+  @available(iOS 17.0, *)
+  func testSceneCaptureTraitsProtectOnlyCapturedWindows() {
+    let first = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+    let second = UIWindow(frame: first.frame)
+    first.traitOverrides.sceneCaptureState = .active
+    second.traitOverrides.sceneCaptureState = .inactive
+    let overlays = SecureContentOverlays(windowProvider: { [first, second] })
+    overlays.configure(
+      ProtectionConfig(enabled: true, protectInAppSwitcher: false, appSwitcherColor: 0)
+    )
+    XCTAssertEqual(switcherCovers(in: first).count, 1)
+    XCTAssertTrue(switcherCovers(in: second).isEmpty)
+
+    first.traitOverrides.sceneCaptureState = .inactive
+    second.traitOverrides.sceneCaptureState = .active
+    overlays.reconcileCapture(in: [first, second])
+    XCTAssertTrue(switcherCovers(in: first).isEmpty)
+    XCTAssertEqual(switcherCovers(in: second).count, 1)
+    overlays.removeAll()
+  }
+
+  func testReconciliationReattachesAnExternallyRemovedPrivacyCover() throws {
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+    let plugin = SecureContentPlugin(
+      windowProvider: { [window] },
+      sceneActivationProvider: { _ in false }
+    )
+    try plugin.configureProtection(config: config(color: 0xFF000000, image: nil))
+    let cover = try XCTUnwrap(switcherCovers(in: window).first)
+    cover.removeFromSuperview()
+
+    try plugin.configureProtection(config: config(color: 0xFF000000, image: nil))
+
+    XCTAssertTrue(cover.superview === window)
+  }
+
+  @available(iOS 17.0, *)
+  func testScreenNotificationStillReconcilesCaptureOnModernIOS() {
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+    window.traitOverrides.sceneCaptureState = .active
+    let runtime = SecureContentRuntime(windowProvider: { [window] })
+    runtime.setupObservers()
+    defer { runtime.dispose() }
+    runtime.configureProtection(
+      config: ProtectionConfig(enabled: true, protectInAppSwitcher: false, appSwitcherColor: 0)
+    )
+    window.subviews.forEach { $0.removeFromSuperview() }
+
+    NotificationCenter.default.post(name: UIScreen.capturedDidChangeNotification, object: window.screen)
+
+    XCTAssertEqual(switcherCovers(in: window).count, 1)
   }
 
   private func config(color: Int64, image: String?) -> ProtectionConfig {

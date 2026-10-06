@@ -61,6 +61,13 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 
 ## Installation
 
+Requires Flutter 3.44+, Dart 3.11+, Android API 23+, and iOS 13+.
+Android host apps must compile against SDK 37 or later. The example uses AGP 9.3.3.
+The example and CI use Flutter 3.47.4, which requires iOS 15+. See the
+[native toolchain](docs/native-toolchain.md) for compiler versions and compatibility.
+AndroidX Core is constrained to 1.17.0 because newer releases remove the
+fingerprint implementation required by stable Biometric on Android 23–27.
+
 ```yaml
 dependencies:
   secure_content: ^2.1.0
@@ -82,6 +89,11 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 
 class MainActivity : FlutterFragmentActivity()
 ```
+
+On Android 23–27, the activity theme must also inherit from
+`Theme.AppCompat.DayNight.NoActionBar` or another AppCompat theme. Set this parent
+for `LaunchTheme` and `NormalTheme` in both `values/styles.xml` and
+`values-night/styles.xml`. The example includes these themes.
 
 ## Quick Start
 
@@ -219,9 +231,8 @@ Key event types include:
   audio separately in the recording or media layer.
 - Android system clipboard "Copied to clipboard" toast is controlled by the OS and cannot be disabled by apps.
 - Integrity checks are heuristic signals, not a guaranteed anti-tamper boundary.
-- The iOS example keeps CocoaPods integration. Flutter 3.44.3 builds with a
-  warning that asks you to remove the CocoaPods integration after all plugins
-  use Swift Package Manager. The warning does not block the current build.
+- The iOS plugin supports CocoaPods and Swift Package Manager. Its native
+  window integration uses UIKit; it does not require SwiftUI.
 
 ## Example
 

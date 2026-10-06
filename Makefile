@@ -1,5 +1,4 @@
 # secure_content — developer tasks
-# All commands run through FVM so they use the Flutter version pinned in .fvmrc.
 
 FLUTTER := fvm flutter
 DART    := fvm dart
@@ -59,6 +58,21 @@ example-test: ## Run example app tests
 pigeon: ## Regenerate pigeon platform-channel code
 	$(DART) run pigeon --input $(PIGEON)
 	$(DART) format .
+
+.PHONY: pigeon-check
+pigeon-check: ## Verify generated platform bindings match the schema
+	$(DART) run pigeon --input $(PIGEON)
+	$(DART) format lib/src/pigeon/secure_content_api.g.dart
+	git diff --exit-code -- lib/src/pigeon/secure_content_api.g.dart android/src/main/kotlin/com/codenameakshay/secure_content/pigeon/SecureContentApi.g.kt ios/secure_content/Sources/secure_content/SecureContentApi.g.swift
+
+.PHONY: android-test
+android-test: ## Run Android native unit tests after building the example
+	cd $(EXAMPLE) && $(FLUTTER) build apk --debug
+	cd $(EXAMPLE)/android && ./gradlew :secure_content:testDebugUnitTest :secure_content:lintDebug
+
+.PHONY: ios-policy-test
+ios-policy-test: ## Run portable Swift native policy tests
+	swift test --package-path ios
 
 .PHONY: doctor
 doctor: ## Run flutter doctor

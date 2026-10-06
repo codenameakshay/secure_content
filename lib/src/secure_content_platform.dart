@@ -92,7 +92,7 @@ class _FlutterApiBridge extends pigeon.SecureContentFlutterApi {
   Stream<SecureContentEvent> get events => _controller.stream;
 
   @override
-  void onEvent(pigeon.SecureEvent event) {
+  Future<void> onEvent(pigeon.SecureEvent event) async {
     _controller.add(SecureContentEvent.fromPigeon(event));
   }
 }

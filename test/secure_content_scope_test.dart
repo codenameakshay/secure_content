@@ -1175,13 +1175,13 @@ void main() {
         await tester.pumpWidget(
           buildScope(
             policy: const SecureContentPolicy(
-              inactivityTimeout: Duration(milliseconds: 10),
+              inactivityTimeout: Duration(seconds: 30),
             ),
           ),
         );
 
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 50));
+        await tester.pump(const Duration(seconds: 31));
 
         expect(find.text('Session locked'), findsOneWidget);
 
@@ -1199,7 +1199,7 @@ void main() {
         await tester.pumpWidget(
           buildScope(
             policy: const SecureContentPolicy(
-              inactivityTimeout: Duration(milliseconds: 10),
+              inactivityTimeout: Duration(seconds: 30),
             ),
             lockScreenBuilder: (context, onUnlock) => ElevatedButton(
               key: const Key('custom_unlock_button'),
@@ -1210,7 +1210,7 @@ void main() {
         );
 
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 50));
+        await tester.pump(const Duration(seconds: 31));
 
         expect(find.text('Custom Unlock'), findsOneWidget);
 
