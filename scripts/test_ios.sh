@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+build_only=false
+case "${1:-}" in
+  "") ;;
+  --build-only) build_only=true ;;
+  *) echo "Usage: test_ios.sh [--build-only]" >&2; exit 2 ;;
+esac
+if [[ $# -gt 1 ]]; then
+  echo "Usage: test_ios.sh [--build-only]" >&2
+  exit 2
+fi
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 flutter_root="${FLUTTER_ROOT:-}"
 if [[ -z "$flutter_root" ]]; then
@@ -9,7 +20,7 @@ if [[ -z "$flutter_root" ]]; then
     echo "flutter must be on PATH or FLUTTER_ROOT must be set" >&2
     exit 1
   fi
-  flutter_root="$(cd "$(dirname "$flutter_bin")/.." && pwd)"
+  flutter_root="$(python3 -c 'import os, sys; print(os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[1]))))' "$flutter_bin")"
 fi
 
 flutter_framework="$flutter_root/bin/cache/artifacts/engine/ios/Flutter.xcframework"
@@ -18,43 +29,21 @@ if [[ ! -d "$flutter_framework" ]]; then
   exit 1
 fi
 
-package_dir="$(mktemp -d "${TMPDIR:-/tmp}/secure-content-ios-tests.XXXXXX")"
-result_bundle="${IOS_TEST_RESULTS_PATH:-${RUNNER_TEMP:-$repo_root/build}/secure-content-ios-tests.xcresult}"
-mkdir -p "$(dirname "$result_bundle")"
-trap 'rm -rf "$package_dir"' EXIT
-mkdir -p "$package_dir/Sources/SecureContent" "$package_dir/Tests/SecureContentRuntimeTests"
-cp "$repo_root/ios/secure_content/Sources/secure_content/SecureContentPlugin.swift" \
-  "$repo_root/ios/secure_content/Sources/secure_content/SecureContentApi.g.swift" \
-  "$repo_root/ios/secure_content/Sources/secure_content/SecureContentNativePolicy.swift" \
-  "$package_dir/Sources/SecureContent/"
-cp "$repo_root/ios/Tests/Runtime/SecureContentPluginRuntimeTests.swift" \
-  "$package_dir/Tests/SecureContentRuntimeTests/"
-cp -R "$flutter_framework" "$package_dir/Flutter.xcframework"
+project_dir="$(mktemp -d "${TMPDIR:-/tmp}/secure-content-ios-tests.XXXXXX")"
+trap 'rm -rf "$project_dir"' EXIT
+ruby "$repo_root/scripts/ios-runtime-project.rb" "$project_dir" "$repo_root" "$flutter_framework"
+project_path="$project_dir/SecureContentRuntimeTests.xcodeproj"
 
-cat > "$package_dir/Package.swift" <<'PACKAGE_MANIFEST'
-// swift-tools-version: 5.9
+xcodebuild build-for-testing \
+  -project "$project_path" \
+  -scheme SecureContentRuntimeTests \
+  -destination "generic/platform=iOS Simulator" \
+  -derivedDataPath "$project_dir/DerivedData" \
+  CODE_SIGNING_ALLOWED=NO
 
-import PackageDescription
-
-let package = Package(
-  name: "SecureContentRuntimeTests",
-  platforms: [.iOS(.v13)],
-  targets: [
-    .binaryTarget(name: "Flutter", path: "Flutter.xcframework"),
-    .target(
-      name: "secure_content",
-      dependencies: ["Flutter"],
-      path: "Sources/SecureContent"
-    ),
-    .testTarget(
-      name: "SecureContentRuntimeTests",
-      dependencies: ["secure_content", "Flutter"],
-      path: "Tests/SecureContentRuntimeTests"
-    ),
-  ],
-  swiftLanguageVersions: [.v5]
-)
-PACKAGE_MANIFEST
+if [[ "$build_only" == true ]]; then
+  exit 0
+fi
 
 simulator_id="$(xcrun simctl list devices available -j | python3 -c '
 import json, sys
@@ -68,24 +57,17 @@ if selected is None:
 print(selected["udid"])
 ')"
 
-scheme="$(cd "$package_dir" && xcodebuild -list -json -quiet | python3 -c '
-import json, sys
-listing = json.load(sys.stdin)
-container = listing.get("project", listing.get("workspace", {}))
-schemes = container.get("schemes", [])
-selected = next((scheme for scheme in schemes if "RuntimeTests" in scheme), None)
-if selected is None:
-    raise SystemExit("Xcode did not expose the SecureContentRuntimeTests package scheme")
-print(selected)
-')"
-
-(cd "$package_dir" && xcodebuild test \
-  -scheme "$scheme" \
+result_bundle="${IOS_TEST_RESULTS_PATH:-${RUNNER_TEMP:-$repo_root/build}/secure-content-ios-tests.xcresult}"
+mkdir -p "$(dirname "$result_bundle")"
+xcodebuild test-without-building \
+  -project "$project_path" \
+  -scheme SecureContentRuntimeTests \
   -destination "platform=iOS Simulator,id=$simulator_id" \
+  -derivedDataPath "$project_dir/DerivedData" \
   -destination-timeout 60 \
   -parallel-testing-enabled NO \
   -test-timeouts-enabled YES \
   -default-test-execution-time-allowance 15 \
   -maximum-test-execution-time-allowance 30 \
   -resultBundlePath "$result_bundle" \
-  CODE_SIGNING_ALLOWED=NO)
+  CODE_SIGNING_ALLOWED=NO

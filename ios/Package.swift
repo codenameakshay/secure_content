@@ -11,7 +11,16 @@ let package = Package(
     .target(
       name: "SecureContentNativePolicies",
       path: "secure_content/Sources/secure_content",
-      exclude: ["SecureContentApi.g.swift", "SecureContentPlugin.swift"],
+      exclude: [
+        "SecureContentApi.g.swift",
+        "SecureContentPlugin.swift",
+        "SecureContentRuntime.swift",
+        "SecureContentOverlays.swift",
+        "SecureContentClipboard.swift",
+        "SecureContentCapture.swift",
+        "SecureContentAuthentication.swift",
+        "SecureContentIntegrity.swift",
+      ],
       sources: ["SecureContentNativePolicy.swift"]
     ),
     .testTarget(

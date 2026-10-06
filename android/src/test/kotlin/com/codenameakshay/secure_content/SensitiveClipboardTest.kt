@@ -28,16 +28,18 @@ class SensitiveClipboardTest {
 
     @Test
     fun tokenDistinguishesAnExternalReplacementWithIdenticalText() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("same text", 60_000)
+        val controller = controller()
+        controller.set("same text", 60_000, activity)
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         val sensitiveToken = sensitiveClipboardToken(clipboard.primaryClip!!)
 
         clipboard.setPrimaryClip(ClipData.newPlainText("another app", "same text"))
-        plugin.clearSensitiveClipboard()
+        focusListener(controller, activity).onWindowFocusChanged(true)
+        controller.clear()
 
         assertNotEquals(sensitiveToken, sensitiveClipboardToken(clipboard.primaryClip!!))
         assertEquals("same text", clipboard.primaryClip!!.getItemAt(0).text)
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
     }
 
     @Test
@@ -50,167 +52,160 @@ class SensitiveClipboardTest {
 
     @Test
     fun expiryWaitsForForegroundClipboardAccessThenClearsItsOwnClip() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 10)
-        val focusListener = focusListener(plugin, activity)
+        val controller = controller()
+        controller.set("secret", 10, activity)
+        val focusListener = focusListener(controller, activity)
         focusListener.onWindowFocusChanged(false)
-        plugin.clearSensitiveClipboard()
+        controller.clear()
 
         shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertEquals("secret", clipboard.primaryClip!!.getItemAt(0).text)
-        assertTrue(ReflectionHelpers.getField(plugin, "clipboardCleanupPending"))
+        assertTrue(ReflectionHelpers.getField(controller, "clipboardCleanupPending"))
 
         focusListener.onWindowFocusChanged(true)
 
         assertNull(clipboard.primaryClip)
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
     }
 
     @Test
     fun engineDetachKeepsDeferredCleanupUntilAnotherActivityGetsFocus() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 60_000)
-        focusListener(plugin, activity).onWindowFocusChanged(false)
-        plugin.clearSensitiveClipboard()
+        val controller = controller()
+        controller.set("secret", 60_000, activity)
+        focusListener(controller, activity).onWindowFocusChanged(false)
+        controller.clear()
 
-        ReflectionHelpers.setField(plugin, "engineAttached", false)
-        ReflectionHelpers.callInstanceMethod<Unit>(plugin, "releaseClipboardObserversAfterEngineDetach")
-        assertTrue(ReflectionHelpers.getField(plugin, "lifecycleCallbacksRegistered"))
-        assertNull(ReflectionHelpers.getField(plugin, "flutterApi"))
+        controller.detachEngine()
+        assertTrue(ReflectionHelpers.getField(controller, "lifecycleCallbacksRegistered"))
 
-        val callbacks = ReflectionHelpers.getField<Application.ActivityLifecycleCallbacks>(plugin, "appLifecycleCallbacks")
+        val callbacks = ReflectionHelpers.getField<Application.ActivityLifecycleCallbacks>(controller, "appLifecycleCallbacks")
         val activityB = Robolectric.buildActivity(Activity::class.java).setup().get()
         callbacks.onActivityResumed(activityB)
-        focusListener(plugin, activityB).onWindowFocusChanged(true)
+        focusListener(controller, activityB).onWindowFocusChanged(true)
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertNull(clipboard.primaryClip)
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
-        assertEquals(false, ReflectionHelpers.getField(plugin, "lifecycleCallbacksRegistered"))
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
+        assertEquals(false, ReflectionHelpers.getField(controller, "lifecycleCallbacksRegistered"))
     }
 
     @Test
     fun engineDetachKeepsAnAlreadyResumedActivityFocusListener() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 60_000)
-        val listener = focusListener(plugin, activity)
+        val controller = controller()
+        controller.set("secret", 60_000, activity)
+        val listener = focusListener(controller, activity)
         listener.onWindowFocusChanged(false)
-        plugin.clearSensitiveClipboard()
-        ReflectionHelpers.setField(plugin, "engineAttached", false)
+        controller.clear()
 
-        ReflectionHelpers.callInstanceMethod<Unit>(plugin, "releaseClipboardObserversAfterEngineDetach")
-        assertTrue(focusListeners(plugin).containsKey(activity))
+        controller.detachEngine()
+        assertTrue(focusListeners(controller).containsKey(activity))
 
         listener.onWindowFocusChanged(true)
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertNull(clipboard.primaryClip)
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
-        assertEquals(false, ReflectionHelpers.getField(plugin, "lifecycleCallbacksRegistered"))
-        assertTrue(focusListeners(plugin).isEmpty())
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
+        assertEquals(false, ReflectionHelpers.getField(controller, "lifecycleCallbacksRegistered"))
+        assertTrue(focusListeners(controller).isEmpty())
     }
 
     @Test
     fun activityDetachBeforeEngineDetachKeepsFocusCleanupForResumedHost() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 60_000)
-        val listener = focusListener(plugin, activity)
+        val controller = controller()
+        controller.set("secret", 60_000, activity)
+        val listener = focusListener(controller, activity)
         listener.onWindowFocusChanged(false)
-        plugin.clearSensitiveClipboard()
+        controller.clear()
 
-        plugin.onDetachedFromActivity()
-        ReflectionHelpers.setField(plugin, "engineAttached", false)
-        ReflectionHelpers.callInstanceMethod<Unit>(plugin, "releaseClipboardObserversAfterEngineDetach")
-        assertTrue(focusListeners(plugin).containsKey(activity))
-        assertTrue(ReflectionHelpers.getField(plugin, "clipboardCleanupPending"))
+        controller.onActivityDetached(activity)
+        controller.detachEngine()
+        assertTrue(focusListeners(controller).containsKey(activity))
+        assertTrue(ReflectionHelpers.getField(controller, "clipboardCleanupPending"))
 
         listener.onWindowFocusChanged(true)
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertNull(clipboard.primaryClip)
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
-        assertEquals(false, ReflectionHelpers.getField(plugin, "lifecycleCallbacksRegistered"))
-        assertTrue(focusListeners(plugin).isEmpty())
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
+        assertEquals(false, ReflectionHelpers.getField(controller, "lifecycleCallbacksRegistered"))
+        assertTrue(focusListeners(controller).isEmpty())
     }
 
     @Test
     fun deferredCleanupAfterEngineDetachPreservesAReplacementClip() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 60_000)
-        focusListener(plugin, activity).onWindowFocusChanged(false)
-        plugin.clearSensitiveClipboard()
-        ReflectionHelpers.setField(plugin, "engineAttached", false)
-        ReflectionHelpers.callInstanceMethod<Unit>(plugin, "releaseClipboardObserversAfterEngineDetach")
+        val controller = controller()
+        controller.set("secret", 60_000, activity)
+        focusListener(controller, activity).onWindowFocusChanged(false)
+        controller.clear()
+        controller.detachEngine()
 
         val replacement = ClipData.newPlainText("replacement", "keep me")
         application.getSystemService(ClipboardManager::class.java).setPrimaryClip(replacement)
-        val callbacks = ReflectionHelpers.getField<Application.ActivityLifecycleCallbacks>(plugin, "appLifecycleCallbacks")
+        val callbacks = ReflectionHelpers.getField<Application.ActivityLifecycleCallbacks>(controller, "appLifecycleCallbacks")
         val activityB = Robolectric.buildActivity(Activity::class.java).setup().get()
         callbacks.onActivityResumed(activityB)
-        focusListener(plugin, activityB).onWindowFocusChanged(true)
+        focusListener(controller, activityB).onWindowFocusChanged(true)
 
         val currentClip = application.getSystemService(ClipboardManager::class.java).primaryClip
         assertEquals("keep me", currentClip!!.getItemAt(0).text)
-        assertTrue(focusListeners(plugin).isEmpty())
-        assertEquals(false, ReflectionHelpers.getField(plugin, "lifecycleCallbacksRegistered"))
+        assertTrue(focusListeners(controller).isEmpty())
+        assertEquals(false, ReflectionHelpers.getField(controller, "lifecycleCallbacksRegistered"))
     }
 
     @Test
     fun expiryClearsWhenAnEarlierResumedWindowRegainsFocus() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 10)
+        val controller = controller()
         val callbacks = ReflectionHelpers.getField<Application.ActivityLifecycleCallbacks>(
-            plugin,
+            controller,
             "appLifecycleCallbacks",
         )
         val activityB = Robolectric.buildActivity(Activity::class.java).setup().get()
+        controller.set("secret", 10, activity)
 
-        // B resumes while A is still the plugin's attached activity. Both windows
-        // can remain resumed in multi-window mode, and focus can move independently.
         callbacks.onActivityResumed(activityB)
-        val listeners = focusListeners(plugin)
+        val listeners = focusListeners(controller)
         val listenerB = listeners[activityB]!!
         listenerB.onWindowFocusChanged(true)
         callbacks.onActivityResumed(activity)
 
         val listenerA = listeners[activity]!!
         listenerB.onWindowFocusChanged(false)
-        plugin.clearSensitiveClipboard()
-        assertTrue(ReflectionHelpers.getField(plugin, "clipboardCleanupPending"))
+        controller.clear()
+        assertTrue(ReflectionHelpers.getField(controller, "clipboardCleanupPending"))
 
         shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
-        assertTrue(ReflectionHelpers.getField(plugin, "clipboardCleanupPending"))
+        assertTrue(ReflectionHelpers.getField(controller, "clipboardCleanupPending"))
 
         listenerA.onWindowFocusChanged(true)
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertNull(clipboard.primaryClip)
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
     }
 
     @Test
     @Config(sdk = [23])
     fun api23ExpiryClearsInBackground() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 10)
-        val focusListener = focusListener(plugin, activity)
+        val controller = controller()
+        controller.set("secret", 10, activity)
+        val focusListener = focusListener(controller, activity)
         focusListener.onWindowFocusChanged(false)
 
         shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertEquals("", clipboard.primaryClip!!.getItemAt(0).text)
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
     }
 
     @Test
     @Config(sdk = [28])
     fun api28ExpiryClearsInBackgroundWithoutRemovingAnExternalSameTextClip() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 10)
-        val focusListener = focusListener(plugin, activity)
+        val controller = controller()
+        controller.set("secret", 10, activity)
+        val focusListener = focusListener(controller, activity)
         focusListener.onWindowFocusChanged(false)
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         clipboard.setPrimaryClip(ClipData.newPlainText("external", "secret"))
@@ -218,53 +213,84 @@ class SensitiveClipboardTest {
         shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
 
         assertEquals("secret", clipboard.primaryClip!!.getItemAt(0).text)
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
     }
 
     @Test
     fun focusedEmptyClipboardReleasesDeferredCleanupOwnership() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", 60_000)
-        val focusListener = focusListener(plugin, activity)
+        val controller = controller()
+        controller.set("secret", 60_000, activity)
+        val focusListener = focusListener(controller, activity)
         focusListener.onWindowFocusChanged(false)
-        plugin.clearSensitiveClipboard()
+        controller.clear()
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         clipboard.clearPrimaryClip()
         focusListener.onWindowFocusChanged(true)
 
-        assertNull(ReflectionHelpers.getField(plugin, "lastSensitiveClipboardToken"))
-        assertEquals(false, ReflectionHelpers.getField(plugin, "clipboardCleanupPending"))
-        assertTrue(focusListeners(plugin).isEmpty())
+        assertNull(ReflectionHelpers.getField(controller, "lastSensitiveClipboardToken"))
+        assertEquals(false, ReflectionHelpers.getField(controller, "clipboardCleanupPending"))
+        assertTrue(focusListeners(controller).isEmpty())
     }
 
     @Test
     fun hugeTtlDoesNotOverflowIntoAnImmediateClear() {
-        val plugin = plugin()
-        plugin.setSensitiveClipboard("secret", Long.MAX_VALUE)
+        val controller = controller()
+        controller.set("secret", Long.MAX_VALUE, activity)
 
         shadowOf(Looper.getMainLooper()).idleFor(1, TimeUnit.SECONDS)
 
         val clipboard = application.getSystemService(ClipboardManager::class.java)
         assertEquals("secret", clipboard.primaryClip!!.getItemAt(0).text)
         assertTrue(
-            ReflectionHelpers.getField<Runnable?>(plugin, "clipboardClearRunnable") != null,
+            ReflectionHelpers.getField<Runnable?>(controller, "clipboardClearRunnable") != null,
         )
     }
 
-    private fun plugin(): SecureContentPlugin = SecureContentPlugin().also {
-        ReflectionHelpers.setField(it, "appContext", application)
-        ReflectionHelpers.setField(it, "activity", activity)
-        ReflectionHelpers.setField(it, "clipboardWindowFocused", true)
+    @Test
+    fun replacingAnExpiringClipWithNoExpiryCancelsTheOldDeadline() {
+        val controller = controller()
+        controller.set("first", 10, activity)
+        focusListener(controller, activity).onWindowFocusChanged(true)
+        controller.set("replacement", 0, activity)
+
+        shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+
+        val clipboard = application.getSystemService(ClipboardManager::class.java)
+        assertEquals("replacement", clipboard.primaryClip!!.getItemAt(0).text)
+        assertNull(ReflectionHelpers.getField(controller, "clipboardClearRunnable"))
     }
 
+    @Test
+    fun detachedDeferredCleanupReleasesResumedActivityReferencesAndSuppressesEvents() {
+        val events = mutableListOf<NativeEvent>()
+        val controller = SensitiveClipboard(application, events::add)
+        val callbacks = ReflectionHelpers.getField<Application.ActivityLifecycleCallbacks>(
+            controller,
+            "appLifecycleCallbacks",
+        )
+        callbacks.onActivityResumed(activity)
+        controller.set("secret", 60_000, activity)
+        controller.detachEngine()
+        assertNull(ReflectionHelpers.getField(controller, "onEvent"))
+        assertNull(ReflectionHelpers.getField(controller, "clipboardClearRunnable"))
+
+        focusListener(controller, activity).onWindowFocusChanged(true)
+
+        assertEquals(listOf(NativeEvent.CLIPBOARD_SET), events)
+        assertTrue(ReflectionHelpers.getField<Set<Activity>>(controller, "resumedActivities").isEmpty())
+        assertTrue(focusListeners(controller).isEmpty())
+    }
+
+    private fun controller(): SensitiveClipboard = SensitiveClipboard(application) { }
+
     private fun focusListeners(
-        plugin: SecureContentPlugin,
+        controller: SensitiveClipboard,
     ): MutableMap<Activity, ViewTreeObserver.OnWindowFocusChangeListener> =
-        ReflectionHelpers.getField(plugin, "clipboardWindowFocusListeners")
+        ReflectionHelpers.getField(controller, "clipboardWindowFocusListeners")
 
     private fun focusListener(
-        plugin: SecureContentPlugin,
+        controller: SensitiveClipboard,
         activity: Activity,
-    ): ViewTreeObserver.OnWindowFocusChangeListener = focusListeners(plugin)[activity]!!
+    ): ViewTreeObserver.OnWindowFocusChangeListener = focusListeners(controller)[activity]!!
 }

@@ -12,9 +12,7 @@ import org.robolectric.annotation.Config
 class AndroidBiometricPromptTest {
     @Test
     fun api28BiometricPromptIncludesRequiredCancelButton() {
-        val plugin = SecureContentPlugin()
-
-        val promptInfo = plugin.createAndroidXPromptInfo(
+        val promptInfo = createAndroidXPromptInfo(
             "Authenticate",
             BiometricManager.Authenticators.BIOMETRIC_WEAK,
         )

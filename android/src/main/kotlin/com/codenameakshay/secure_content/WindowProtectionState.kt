@@ -2,8 +2,10 @@ package com.codenameakshay.secure_content
 
 import android.view.Window
 import android.view.WindowManager
+import androidx.annotation.MainThread
 import java.util.WeakHashMap
 
+@MainThread
 internal class WindowProtectionState {
     private val owner = Any()
 
@@ -29,20 +31,17 @@ internal class WindowProtectionState {
 
 private object WindowProtectionRegistry {
     private data class Request(
-        val secureEnabled: Boolean,
         val appSwitcherProtected: Boolean,
         val appSwitcherColor: Int,
-        val order: Long,
     )
 
     private data class WindowState(
         val originalSecureFlag: Boolean,
         var originalNavigationBarColor: Int? = null,
-        val requests: MutableMap<Any, Request> = mutableMapOf(),
+        val requests: MutableMap<Any, Request> = linkedMapOf(),
     )
 
     private val states = WeakHashMap<Window, WindowState>()
-    private var requestOrder = 0L
 
     @Synchronized
     fun update(
@@ -52,8 +51,7 @@ private object WindowProtectionRegistry {
         appSwitcherProtected: Boolean,
         appSwitcherColor: Int,
     ) {
-        val active = secureEnabled
-        if (!active) {
+        if (!secureEnabled) {
             remove(window, owner)
             return
         }
@@ -65,11 +63,10 @@ private object WindowProtectionRegistry {
             )
         }
         val hadSwitcherOwner = state.requests.values.any { it.appSwitcherProtected }
+        state.requests.remove(owner)
         state.requests[owner] = Request(
-            secureEnabled = secureEnabled,
             appSwitcherProtected = appSwitcherProtected,
             appSwitcherColor = appSwitcherColor,
-            order = ++requestOrder,
         )
         val hasSwitcherOwner = state.requests.values.any { it.appSwitcherProtected }
         if (!hadSwitcherOwner && hasSwitcherOwner) {
@@ -98,18 +95,8 @@ private object WindowProtectionRegistry {
     }
 
     private fun applyAggregate(window: Window, state: WindowState) {
-        val flag = WindowManager.LayoutParams.FLAG_SECURE
-        if (state.requests.values.any { it.secureEnabled }) {
-            window.addFlags(flag)
-        } else if (state.originalSecureFlag) {
-            window.addFlags(flag)
-        } else {
-            window.clearFlags(flag)
-        }
-
-        val latestAppSwitcher = state.requests.values
-            .filter { it.secureEnabled && it.appSwitcherProtected }
-            .maxByOrNull { it.order }
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        val latestAppSwitcher = state.requests.values.lastOrNull { it.appSwitcherProtected }
         if (latestAppSwitcher != null) {
             window.navigationBarColor = latestAppSwitcher.appSwitcherColor
         }
