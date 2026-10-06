@@ -56,10 +56,17 @@ Completed locally:
 - Swift source syntax, package manifests, Ruby syntax, shell syntax, and diff
   whitespace checks.
 
-The full Android CI result and final iOS runtime result are recorded in the
-pull request once complete. Swift syntax checks on Linux do not typecheck
-UIKit or Flutter. CI builds both the example and runtime test bundle before
-starting the single simulator test pass, with retries and parallel workers off.
+CI passed all 49 Android tests, including SDK 37, along with lint and the APK
+build. Xcode 27 compiled the iOS example and runtime suite. The first simulator
+pass executed 14 tests: ten passed and four clipboard tests failed with
+pasteboard authorization errors in the unhosted XCTest process. The harness
+now uses a UIKit app host; verification of this correction remains pending.
+The CI step timeout also interrupted result-bundle finalization; the runner
+now has more time to save results while individual test waits stay bounded.
+The final runtime result is recorded in the pull request once complete.
+Swift syntax checks on Linux do not typecheck UIKit or Flutter. CI builds both
+the example and runtime test bundle before running tests. Each invocation uses
+one simulator pass, with retries and parallel workers off.
 
 ## Platform limits
 

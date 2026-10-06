@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+build_only=false
+case "${1:-}" in
+  "") ;;
+  --build-only) build_only=true ;;
+  *) echo "Usage: test_ios.sh [--build-only]" >&2; exit 2 ;;
+esac
+if [[ $# -gt 1 ]]; then
+  echo "Usage: test_ios.sh [--build-only]" >&2
+  exit 2
+fi
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 flutter_root="${FLUTTER_ROOT:-}"
 if [[ -z "$flutter_root" ]]; then
@@ -18,18 +29,21 @@ if [[ ! -d "$flutter_framework" ]]; then
   exit 1
 fi
 
-package_dir="$(mktemp -d "${TMPDIR:-/tmp}/secure-content-ios-tests.XXXXXX")"
-result_bundle="${IOS_TEST_RESULTS_PATH:-${RUNNER_TEMP:-$repo_root/build}/secure-content-ios-tests.xcresult}"
-mkdir -p "$(dirname "$result_bundle")"
-trap 'rm -rf "$package_dir"' EXIT
-mkdir -p "$package_dir/Sources/SecureContent" "$package_dir/Tests/SecureContentRuntimeTests"
-cp "$repo_root/ios/secure_content/Sources/secure_content/"*.swift \
-  "$package_dir/Sources/SecureContent/"
-cp "$repo_root/ios/Tests/Runtime/"*.swift \
-  "$package_dir/Tests/SecureContentRuntimeTests/"
-cp -R "$flutter_framework" "$package_dir/Flutter.xcframework"
+project_dir="$(mktemp -d "${TMPDIR:-/tmp}/secure-content-ios-tests.XXXXXX")"
+trap 'rm -rf "$project_dir"' EXIT
+ruby "$repo_root/scripts/ios-runtime-project.rb" "$project_dir" "$repo_root" "$flutter_framework"
+project_path="$project_dir/SecureContentRuntimeTests.xcodeproj"
 
-cp "$repo_root/scripts/ios-runtime-package.swift" "$package_dir/Package.swift"
+xcodebuild build-for-testing \
+  -project "$project_path" \
+  -scheme SecureContentRuntimeTests \
+  -destination "generic/platform=iOS Simulator" \
+  -derivedDataPath "$project_dir/DerivedData" \
+  CODE_SIGNING_ALLOWED=NO
+
+if [[ "$build_only" == true ]]; then
+  exit 0
+fi
 
 simulator_id="$(xcrun simctl list devices available -j | python3 -c '
 import json, sys
@@ -43,31 +57,17 @@ if selected is None:
 print(selected["udid"])
 ')"
 
-scheme="$(cd "$package_dir" && xcodebuild -list -json -quiet | python3 -c '
-import json, sys
-listing = json.load(sys.stdin)
-container = listing.get("project", listing.get("workspace", {}))
-schemes = container.get("schemes", [])
-selected = next((scheme for scheme in schemes if "RuntimeTests" in scheme), None)
-if selected is None:
-    raise SystemExit("Xcode did not expose the SecureContentRuntimeTests package scheme")
-print(selected)
-')"
-
-(cd "$package_dir" && xcodebuild build-for-testing \
-  -scheme "$scheme" \
-  -destination "generic/platform=iOS Simulator" \
-  -derivedDataPath "$package_dir/DerivedData" \
-  CODE_SIGNING_ALLOWED=NO)
-
-(cd "$package_dir" && xcodebuild test-without-building \
-  -scheme "$scheme" \
+result_bundle="${IOS_TEST_RESULTS_PATH:-${RUNNER_TEMP:-$repo_root/build}/secure-content-ios-tests.xcresult}"
+mkdir -p "$(dirname "$result_bundle")"
+xcodebuild test-without-building \
+  -project "$project_path" \
+  -scheme SecureContentRuntimeTests \
   -destination "platform=iOS Simulator,id=$simulator_id" \
-  -derivedDataPath "$package_dir/DerivedData" \
+  -derivedDataPath "$project_dir/DerivedData" \
   -destination-timeout 60 \
   -parallel-testing-enabled NO \
   -test-timeouts-enabled YES \
   -default-test-execution-time-allowance 15 \
   -maximum-test-execution-time-allowance 30 \
   -resultBundlePath "$result_bundle" \
-  CODE_SIGNING_ALLOWED=NO)
+  CODE_SIGNING_ALLOWED=NO

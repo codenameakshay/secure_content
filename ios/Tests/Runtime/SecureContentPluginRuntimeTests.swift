@@ -7,8 +7,10 @@ import XCTest
 @MainActor
 final class SecureContentPluginRuntimeTests: XCTestCase {
   func testSensitiveClipboardUsesSystemExpiration() throws {
+    try requireForegroundApplication()
     var plugin: SecureContentPlugin? = SecureContentPlugin()
     try plugin?.setSensitiveClipboard(content: "expires from pasteboard", clearAfterMs: 700)
+    XCTAssertEqual(UIPasteboard.general.string, "expires from pasteboard")
     plugin = nil
 
     let expirationWait = expectation(description: "pasteboard expiration")
@@ -21,6 +23,7 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
   }
 
   func testExpiredTimerPreservesANewerIdenticalClipboardCopy() throws {
+    try requireForegroundApplication()
     let plugin = SecureContentPlugin()
     try plugin.setSensitiveClipboard(content: "same text", clearAfterMs: 700)
     let originalChangeCount = UIPasteboard.general.changeCount
@@ -37,6 +40,7 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
   }
 
   func testExplicitClipboardClearRemovesOwnedContent() throws {
+    try requireForegroundApplication()
     let plugin = SecureContentPlugin()
     try plugin.setSensitiveClipboard(content: "explicit clear", clearAfterMs: 0)
 
@@ -46,6 +50,7 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
   }
 
   func testVeryLongClipboardTTLDoesNotOverflowDispatchDeadline() throws {
+    try requireForegroundApplication()
     let plugin = SecureContentPlugin()
 
     try plugin.setSensitiveClipboard(content: "long ttl", clearAfterMs: Int64.max)
@@ -55,6 +60,7 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
   }
 
   func testExplicitClearPreservesANewerIdenticalClipboardCopy() throws {
+    try requireForegroundApplication()
     let plugin = SecureContentPlugin()
     try plugin.setSensitiveClipboard(content: "same text", clearAfterMs: 0)
     UIPasteboard.general.setItems([[
@@ -216,6 +222,28 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
     NotificationCenter.default.post(name: UIScreen.capturedDidChangeNotification, object: window.screen)
 
     XCTAssertEqual(switcherCovers(in: window).count, 1)
+  }
+
+  private func requireForegroundApplication() throws {
+    let foreground = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in
+        MainActor.assumeIsolated { Self.foregroundScene != nil }
+      },
+      object: nil
+    )
+    wait(for: [foreground], timeout: 5)
+    XCTAssertEqual(Bundle.main.bundleIdentifier, "dev.securecontent.runtime-host")
+    _ = try XCTUnwrap(
+      Self.foregroundScene,
+      "Clipboard runtime tests require a foreground application with a visible key window."
+    )
+  }
+
+  private static var foregroundScene: UIWindowScene? {
+    UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first {
+      $0.activationState == .foregroundActive
+        && $0.windows.contains { $0.isKeyWindow && !$0.isHidden }
+    }
   }
 
   private func config(color: Int64, image: String?) -> ProtectionConfig {

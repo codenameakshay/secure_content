@@ -84,8 +84,12 @@ remains unverified locally and required in CI.
 
 Use `make check`, `make android-test`, and `make ios-policy-test` before the final
 device pass. `scripts/test_ios.sh` requires macOS, Xcode, and the pinned Flutter
-iOS artifacts; it gathers every plugin and runtime-test Swift source.
-The example and runtime-test package use iOS 15, matching Flutter 3.47's
+iOS artifacts and the CocoaPods `xcodeproj` Ruby gem. It gathers every plugin
+and runtime-test Swift source into an app-hosted XCTest project. A foreground
+UIKit host supplies the application identity required for real pasteboard
+access. Use `scripts/test_ios.sh --build-only` to compile without discovering
+or starting a simulator.
+The example and runtime-test host use iOS 15, matching Flutter 3.47's
 deployment minimum. The library's iOS 13 API availability is retained for
 consumers on earlier supported Flutter versions.
 

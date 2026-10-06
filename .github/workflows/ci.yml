@@ -68,11 +68,12 @@ jobs:
         timeout-minutes: 5
         working-directory: example
       - run: ./scripts/test_ios.sh
-        timeout-minutes: 5
+        timeout-minutes: 10
       - name: Export simulator screenshots
         if: always()
+        timeout-minutes: 2
         run: |
-          if [[ -d "$RUNNER_TEMP/secure-content-ios-tests.xcresult" ]]; then
+          if [[ -f "$RUNNER_TEMP/secure-content-ios-tests.xcresult/Info.plist" ]]; then
             xcrun xcresulttool export attachments \
               --path "$RUNNER_TEMP/secure-content-ios-tests.xcresult" \
               --output-path "$RUNNER_TEMP/secure-content-ios-screenshots"
