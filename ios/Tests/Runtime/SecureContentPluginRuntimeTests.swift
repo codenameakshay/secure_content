@@ -97,7 +97,24 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
     XCTAssertEqual(green, CGFloat(0x34) / 255, accuracy: 0.01)
     XCTAssertEqual(blue, CGFloat(0x56) / 255, accuracy: 0.01)
     XCTAssertEqual(alpha, 1)
-    let attachment = XCTAttachment(image: renderedImage(of: window))
+    let renderedCover = renderedImage(of: updatedCover)
+    let centerPixel = try XCTUnwrap(centerPixel(of: renderedCover))
+    var renderedRed: CGFloat = 0
+    var renderedGreen: CGFloat = 0
+    var renderedBlue: CGFloat = 0
+    var renderedAlpha: CGFloat = 0
+    centerPixel.getRed(
+      &renderedRed,
+      green: &renderedGreen,
+      blue: &renderedBlue,
+      alpha: &renderedAlpha
+    )
+    XCTAssertEqual(renderedRed, CGFloat(0x12) / 255, accuracy: 0.02)
+    XCTAssertEqual(renderedGreen, CGFloat(0x34) / 255, accuracy: 0.02)
+    XCTAssertEqual(renderedBlue, CGFloat(0x56) / 255, accuracy: 0.02)
+    XCTAssertEqual(renderedAlpha, 1, accuracy: 0.01)
+
+    let attachment = XCTAttachment(image: renderedCover)
     attachment.name = "Configured app-switcher privacy cover"
     attachment.lifetime = .keepAlways
     add(attachment)
@@ -265,5 +282,36 @@ final class SecureContentPluginRuntimeTests: XCTestCase {
     UIGraphicsImageRenderer(bounds: view.bounds).image { context in
       view.layer.render(in: context.cgContext)
     }
+  }
+
+  private func centerPixel(of image: UIImage) -> UIColor? {
+    guard let cgImage = image.cgImage else { return nil }
+    let width = cgImage.width
+    let height = cgImage.height
+    let pixelData = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height * 4)
+    defer { pixelData.deallocate() }
+    let bitmapInfo = CGBitmapInfo.byteOrder32Big.rawValue
+      | CGImageAlphaInfo.premultipliedLast.rawValue
+    guard let context = CGContext(
+      data: pixelData,
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bytesPerRow: width * 4,
+      space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: bitmapInfo
+    ) else {
+      return nil
+    }
+    context.setBlendMode(.copy)
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+    let pixelOffset = ((height / 2) * width + width / 2) * 4
+    return UIColor(
+      red: CGFloat(pixelData[pixelOffset]) / 255,
+      green: CGFloat(pixelData[pixelOffset + 1]) / 255,
+      blue: CGFloat(pixelData[pixelOffset + 2]) / 255,
+      alpha: CGFloat(pixelData[pixelOffset + 3]) / 255
+    )
   }
 }

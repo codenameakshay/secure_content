@@ -118,6 +118,11 @@ suite, retaining its `.xcresult` bundle and privacy-cover image attachment.
 Pigeon 27.1.0 regenerated all three platform bindings without differences.
 The audit used temporary output files and retained the existing generated code.
 
+Final native implementation and toolchain verification are recorded in the
+[native rewrite audit](native-rewrite-audit.md). CI on `3c90eef` passed the Dart
+gates, 49 Android tests, six portable Swift policy tests, and 14 hosted iOS
+runtime tests. The earlier hostless clipboard hang is resolved.
+
 ## Limits and rejected hypotheses
 
 - Controller disposal already removes its source in the serialized service

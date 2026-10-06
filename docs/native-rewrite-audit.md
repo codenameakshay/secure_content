@@ -60,10 +60,16 @@ CI passed all 49 Android tests, including SDK 37, along with lint and the APK
 build. Xcode 27 compiled the iOS example and runtime suite. The first simulator
 pass executed 14 tests: ten passed and four clipboard tests failed with
 pasteboard authorization errors in the unhosted XCTest process. The harness
-now uses a UIKit app host; verification of this correction remains pending.
+now uses a UIKit app host. CI on `3c90eef` passed all 14 simulator tests,
+including every clipboard case, and all six portable policy tests. The runtime
+suite completed in about 24 seconds with zero failures; the full iOS job,
+including setup, builds, simulator startup, and artifacts, took 12m40s.
 The CI step timeout also interrupted result-bundle finalization; the runner
 now has more time to save results while individual test waits stay bounded.
-The final runtime result is recorded in the pull request once complete.
+The exported privacy-cover image from that run was transparent because it
+rendered a hidden test window. The fixture now renders the visible cover and
+checks its pixel color and opacity before attaching the image. This is a test
+artifact correction; production code is unchanged.
 Swift syntax checks on Linux do not typecheck UIKit or Flutter. CI builds both
 the example and runtime test bundle before running tests. Each invocation uses
 one simulator pass, with retries and parallel workers off.
