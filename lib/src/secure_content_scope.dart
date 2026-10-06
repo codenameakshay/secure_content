@@ -2,10 +2,15 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import 'secure_content_event.dart';
 import 'secure_content_policy.dart';
+import 'secure_content_platform.dart';
 import 'secure_content_service.dart';
+
+int _nextScopeSemanticsIdentifier = 0;
 
 /// Builder for a custom lock screen overlay.
 ///
@@ -38,6 +43,9 @@ class SecureContentScope extends StatefulWidget {
 
   final Widget child;
   final bool enabled;
+
+  /// Custom screen-capture cover builder. The returned widget must be fully
+  /// opaque and fill the available space.
   final WidgetBuilder? overlayBuilder;
   final ValueChanged<SecureContentEvent>? onEvent;
   final bool debugShowOverlay;
@@ -70,25 +78,51 @@ class _SecureContentScopeState extends State<SecureContentScope>
     with WidgetsBindingObserver {
   final Object _sourceKey = Object();
   final SecureContentService _service = SecureContentService.instance;
+  final SecureContentPlatform _platform = SecureContentPlatform.instance;
+  final FocusScopeNode _childFocusScope = FocusScopeNode(
+    debugLabel: 'SecureContentScope protected child',
+  );
+  late final String _childSemanticsIdentifier;
+  TextEditingController? _focusedTextController;
 
   StreamSubscription<SecureContentEvent>? _eventsSubscription;
   Timer? _idleTimer;
+  DateTime _lastUserInteractionAt = DateTime.now();
+  final Stopwatch _idleStopwatch = Stopwatch()..start();
 
   bool _isCaptured = false;
+  bool _captureStatePrimed = false;
+  int _captureStateRequestGeneration = 0;
+  int _protectionConfigGeneration = 0;
+  bool _nativeProtectionReady = false;
   bool _isLocked = false;
   bool _isAuthenticating = false;
   bool _isBiometricLocked = false;
   bool _needsBiometricAuth = false;
+  bool _biometricRequestCrossedBackground = false;
   bool _biometricUnavailable = false;
   int _biometricRequestGeneration = 0;
   bool _integrityRiskDetected = false;
   bool _appSwitcherProtected = false;
   bool _isAppActive = true;
+  AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
 
   @override
   void initState() {
     super.initState();
+    _appLifecycleState =
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
+    _childSemanticsIdentifier =
+        'secure-content-scope-${_nextScopeSemanticsIdentifier++}';
+    _isAppActive = _appLifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
+    HardwareKeyboard.instance.addHandler(_handleHardwareKeyEvent);
+    FocusManager.instance.addListener(_handlePrimaryFocusChanged);
+    SemanticsBinding.instance.addSemanticsActionListener(
+      _handleSemanticsActionEvent,
+    );
+    _nativeProtectionReady = !widget.enabled || !_platform.isSupportedPlatform;
+    _captureStatePrimed = !widget.enabled || !_platform.isSupportedPlatform;
     _bindSource();
 
     _eventsSubscription = _service.events.listen(_handleEvent);
@@ -103,11 +137,13 @@ class _SecureContentScopeState extends State<SecureContentScope>
       // content is never rendered even for a single frame (AUTH-02).
       _isLocked = true;
       _isBiometricLocked = true;
-      _isAuthenticating = true;
-      final generation = ++_biometricRequestGeneration;
-      unawaited(
-        _awaitBiometricResult(widget.policy.biometricReason, generation),
-      );
+      if (_appLifecycleState == AppLifecycleState.resumed) {
+        _isAuthenticating = true;
+        final generation = ++_biometricRequestGeneration;
+        unawaited(
+          _awaitBiometricResult(widget.policy.biometricReason, generation),
+        );
+      }
     }
 
     _maybeCheckIntegrity();
@@ -137,11 +173,23 @@ class _SecureContentScopeState extends State<SecureContentScope>
       _isAuthenticating = false;
       _isBiometricLocked = false;
       _needsBiometricAuth = false;
+      _captureStateRequestGeneration += 1;
+      _captureStatePrimed = true;
+      _nativeProtectionReady = true;
       _updateState(() {
         _isLocked = false;
         _integrityRiskDetected = false;
         _biometricUnavailable = false;
       });
+    }
+
+    if (enabledChanged && widget.enabled) {
+      final supported = _platform.isSupportedPlatform;
+      _nativeProtectionReady = !supported;
+      _captureStatePrimed = !supported;
+      if (supported) {
+        _primeCaptureState();
+      }
     }
 
     final biometricPolicyDisabled =
@@ -165,7 +213,11 @@ class _SecureContentScopeState extends State<SecureContentScope>
         (!oldWidget.enabled || !oldWidget.policy.requireBiometricOnResume);
     if (biometricJustRequired) {
       _needsBiometricAuth = true;
-      _lockAndRequestBiometric();
+      _isLocked = true;
+      _isBiometricLocked = true;
+      if (_appLifecycleState == AppLifecycleState.resumed) {
+        _lockAndRequestBiometric();
+      }
     }
 
     final integrityChecksJustDisabled =
@@ -186,12 +238,13 @@ class _SecureContentScopeState extends State<SecureContentScope>
 
     if (enabledChanged ||
         oldWidget.policy.inactivityTimeout != widget.policy.inactivityTimeout) {
-      _restartIdleTimer();
+      _restartIdleTimer(resetElapsed: enabledChanged);
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appLifecycleState = state;
     // LIFE-02: this feeds build()'s riskyState derivation, so it must go
     // through setState (when mounted) instead of a raw field assignment,
     // or the watermark/risk UI can go stale until some unrelated rebuild.
@@ -200,19 +253,39 @@ class _SecureContentScopeState extends State<SecureContentScope>
     });
 
     if (state == AppLifecycleState.resumed) {
+      if (widget.enabled && _platform.isSupportedPlatform) {
+        if (!_nativeProtectionReady) {
+          unawaited(_bindSource());
+        }
+        if (!_captureStatePrimed) {
+          unawaited(_primeCaptureState());
+        }
+      }
       if (widget.policy.requireBiometricOnResume &&
           widget.enabled &&
           _needsBiometricAuth) {
         _lockAndRequestBiometric();
       }
       _maybeCheckIntegrity();
-      _restartIdleTimer();
+      _restartIdleTimer(resetElapsed: false);
       return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _idleTimer?.cancel();
+      _idleTimer = null;
+      if (_isAuthenticating) {
+        _biometricRequestCrossedBackground = true;
+      }
     }
 
     if (widget.policy.requireBiometricOnResume &&
         widget.enabled &&
-        !_isAuthenticating) {
+        (state == AppLifecycleState.paused ||
+            state == AppLifecycleState.hidden ||
+            state == AppLifecycleState.detached)) {
       _needsBiometricAuth = true;
     }
   }
@@ -220,35 +293,92 @@ class _SecureContentScopeState extends State<SecureContentScope>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
+    FocusManager.instance.removeListener(_handlePrimaryFocusChanged);
+    _focusedTextController?.removeListener(_handleFocusedTextChanged);
+    SemanticsBinding.instance.removeSemanticsActionListener(
+      _handleSemanticsActionEvent,
+    );
     _idleTimer?.cancel();
     _eventsSubscription?.cancel();
-    unawaited(_service.removeSource(_sourceKey));
+    _captureStateRequestGeneration += 1;
+    _protectionConfigGeneration += 1;
+    _childFocusScope.dispose();
+    unawaited(_removeSource());
     super.dispose();
   }
 
-  Future<void> _bindSource() {
-    return _service.updateSource(
-      key: _sourceKey,
-      enabled: widget.enabled,
-      protectInAppSwitcher: widget.protectInAppSwitcher,
-      appSwitcherColor: widget.appSwitcherColor,
-      appSwitcherImageName: widget.appSwitcherImageName,
-    );
+  Future<void> _removeSource() async {
+    try {
+      await _service.removeSource(_sourceKey);
+    } catch (error, stackTrace) {
+      _reportInternalError(
+        error,
+        stackTrace,
+        'while removing native secure-content protection',
+      );
+    }
+  }
+
+  Future<void> _bindSource() async {
+    final generation = ++_protectionConfigGeneration;
+    try {
+      await _service.updateSource(
+        key: _sourceKey,
+        enabled: widget.enabled,
+        protectInAppSwitcher: widget.protectInAppSwitcher,
+        appSwitcherColor: widget.appSwitcherColor,
+        appSwitcherImageName: widget.appSwitcherImageName,
+      );
+      if (mounted && generation == _protectionConfigGeneration) {
+        _updateState(() {
+          _nativeProtectionReady = true;
+        });
+      }
+    } catch (error, stackTrace) {
+      _reportInternalError(
+        error,
+        stackTrace,
+        'while configuring native secure-content protection',
+      );
+    }
   }
 
   Future<void> _primeCaptureState() async {
-    final captured = await _service.isScreenCaptured();
-    if (!mounted) {
-      return;
+    final generation = ++_captureStateRequestGeneration;
+    try {
+      final captured = await _service.isScreenCaptured();
+      if (!mounted || generation != _captureStateRequestGeneration) {
+        return;
+      }
+      _updateState(() {
+        _isCaptured = captured;
+        _captureStatePrimed = true;
+      });
+    } catch (error, stackTrace) {
+      _reportInternalError(
+        error,
+        stackTrace,
+        'while reading the initial screen-capture state',
+      );
     }
-    setState(() {
-      _isCaptured = captured;
-    });
   }
 
   void _maybeCheckIntegrity() {
     if (widget.enabled && widget.policy.enableIntegrityChecks) {
-      unawaited(_service.checkIntegrity());
+      unawaited(_checkIntegrity());
+    }
+  }
+
+  Future<void> _checkIntegrity() async {
+    try {
+      await _service.checkIntegrity();
+    } catch (error, stackTrace) {
+      _reportInternalError(
+        error,
+        stackTrace,
+        'while checking device integrity',
+      );
     }
   }
 
@@ -274,13 +404,17 @@ class _SecureContentScopeState extends State<SecureContentScope>
 
     switch (event.type) {
       case SecureContentEventType.recordingStarted:
+        _captureStateRequestGeneration += 1;
         _updateState(() {
           _isCaptured = true;
+          _captureStatePrimed = true;
         });
         break;
       case SecureContentEventType.recordingStopped:
+        _captureStateRequestGeneration += 1;
         _updateState(() {
           _isCaptured = false;
+          _captureStatePrimed = true;
         });
         break;
       case SecureContentEventType.appSwitcherProtected:
@@ -333,17 +467,44 @@ class _SecureContentScopeState extends State<SecureContentScope>
     if (!mounted) {
       return;
     }
-    setState(updater);
+    setState(() {
+      updater();
+      if (_blocksProtectedContent) {
+        _childFocusScope.unfocus();
+      }
+    });
   }
 
-  void _restartIdleTimer() {
+  void _restartIdleTimer({bool resetElapsed = true}) {
     _idleTimer?.cancel();
+    _idleTimer = null;
+    if (resetElapsed) {
+      _lastUserInteractionAt = DateTime.now();
+      _idleStopwatch
+        ..reset()
+        ..start();
+    }
     final timeout = widget.policy.inactivityTimeout;
     if (timeout == null || !widget.enabled) {
       return;
     }
 
-    _idleTimer = Timer(timeout, _activateIdleLock);
+    final elapsed = DateTime.now().difference(_lastUserInteractionAt);
+    final nonNegativeElapsed = elapsed.isNegative ? Duration.zero : elapsed;
+    final elapsedIdle = nonNegativeElapsed > _idleStopwatch.elapsed
+        ? nonNegativeElapsed
+        : _idleStopwatch.elapsed;
+    final remaining = timeout - elapsedIdle;
+    if (remaining <= Duration.zero) {
+      _activateIdleLock();
+      return;
+    }
+    if (_appLifecycleState == AppLifecycleState.paused ||
+        _appLifecycleState == AppLifecycleState.hidden ||
+        _appLifecycleState == AppLifecycleState.detached) {
+      return;
+    }
+    _idleTimer = Timer(remaining, _activateIdleLock);
   }
 
   void _activateIdleLock() {
@@ -370,6 +531,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
       return;
     }
     _isAuthenticating = true;
+    _biometricRequestCrossedBackground = false;
     _isBiometricLocked = true;
     final generation = ++_biometricRequestGeneration;
     _activateIdleLock();
@@ -381,18 +543,51 @@ class _SecureContentScopeState extends State<SecureContentScope>
   /// broadcast event stream (which every SecureContentScope listens to and
   /// which may carry another scope's request outcome).
   Future<void> _awaitBiometricResult(String reason, int generation) async {
-    final outcome = await _service.requestBiometricAuth(reason);
+    late final SecureContentEventType outcome;
+    try {
+      outcome = await _service.requestBiometricAuth(reason);
+    } catch (error, stackTrace) {
+      _reportInternalError(
+        error,
+        stackTrace,
+        'while requesting biometric authentication',
+      );
+      if (!mounted || generation != _biometricRequestGeneration) {
+        return;
+      }
+      _isAuthenticating = false;
+      _updateState(() {
+        _biometricUnavailable = true;
+      });
+      return;
+    }
     if (!mounted || generation != _biometricRequestGeneration) {
       return;
     }
     _isAuthenticating = false;
+    if (_biometricRequestCrossedBackground) {
+      _biometricRequestCrossedBackground = false;
+      _needsBiometricAuth = true;
+      if (_appLifecycleState == AppLifecycleState.resumed &&
+          widget.enabled &&
+          widget.policy.requireBiometricOnResume) {
+        _lockAndRequestBiometric();
+      }
+      return;
+    }
     switch (outcome) {
       case SecureContentEventType.biometricAuthSucceeded:
         _needsBiometricAuth = false;
         _updateState(() {
           _biometricUnavailable = false;
         });
-        _unlock();
+        if (_appLifecycleState == AppLifecycleState.paused ||
+            _appLifecycleState == AppLifecycleState.hidden ||
+            _appLifecycleState == AppLifecycleState.detached) {
+          _needsBiometricAuth = true;
+        } else {
+          _unlock();
+        }
         break;
       case SecureContentEventType.biometricUnavailable:
         // AUTH-03: fail closed. Stay locked and surface an explicit
@@ -416,6 +611,104 @@ class _SecureContentScopeState extends State<SecureContentScope>
       return;
     }
     _restartIdleTimer();
+  }
+
+  bool _handleHardwareKeyEvent(KeyEvent event) {
+    if (!_blocksProtectedContent && _childFocusScope.hasFocus) {
+      _onUserInteraction();
+    }
+    return false;
+  }
+
+  void _handlePrimaryFocusChanged() {
+    TextEditingController? controller;
+    FocusManager.instance.primaryFocus?.context?.visitAncestorElements((
+      element,
+    ) {
+      final widget = element.widget;
+      if (widget is EditableText) {
+        controller = widget.controller;
+        return false;
+      }
+      return true;
+    });
+
+    if (identical(controller, _focusedTextController)) {
+      return;
+    }
+    _focusedTextController?.removeListener(_handleFocusedTextChanged);
+    _focusedTextController = controller;
+    _focusedTextController?.addListener(_handleFocusedTextChanged);
+  }
+
+  void _handleFocusedTextChanged() {
+    if (!_blocksProtectedContent && _childFocusScope.hasFocus) {
+      _onUserInteraction();
+    }
+  }
+
+  void _handleSemanticsActionEvent(SemanticsActionEvent event) {
+    if (_isChildSemanticsAction(event)) {
+      _onUserInteraction();
+    }
+  }
+
+  bool _isChildSemanticsAction(SemanticsActionEvent event) {
+    SemanticsNode? root;
+    for (final renderView in RendererBinding.instance.renderViews) {
+      if (renderView.flutterView.viewId == event.viewId) {
+        root = renderView.owner?.semanticsOwner?.rootSemanticsNode;
+        break;
+      }
+    }
+    if (root == null) {
+      return false;
+    }
+
+    SemanticsNode? findActionNode(SemanticsNode node) {
+      if (node.id == event.nodeId) {
+        return node;
+      }
+      SemanticsNode? match;
+      node.visitChildren((child) {
+        match = findActionNode(child);
+        return match == null;
+      });
+      return match;
+    }
+
+    var actionNode = findActionNode(root);
+    while (actionNode != null) {
+      if (actionNode.getSemanticsData().identifier ==
+          _childSemanticsIdentifier) {
+        return true;
+      }
+      actionNode = actionNode.parent;
+    }
+    return false;
+  }
+
+  bool get _blocksProtectedContent =>
+      widget.enabled &&
+      (!_nativeProtectionReady ||
+          !_captureStatePrimed ||
+          _isCaptured ||
+          _isLocked ||
+          (widget.policy.hardBlockOnIntegrityRisk && _integrityRiskDetected));
+
+  void _reportInternalError(
+    Object error,
+    StackTrace stackTrace,
+    String context,
+  ) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'secure_content',
+        context: ErrorDescription(context),
+      ),
+    );
   }
 
   void _handleUnlock() {
@@ -443,25 +736,42 @@ class _SecureContentScopeState extends State<SecureContentScope>
             _integrityRiskDetected ||
             _appSwitcherProtected ||
             !_isAppActive);
+    final protectionPending =
+        widget.enabled && (!_nativeProtectionReady || !_captureStatePrimed);
+    final blocksProtectedContent = _blocksProtectedContent;
 
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _onUserInteraction(),
       onPointerMove: (_) => _onUserInteraction(),
+      onPointerSignal: (_) => _onUserInteraction(),
       child: Stack(
         fit: StackFit.passthrough,
         children: [
-          widget.child,
+          FocusScope(
+            node: _childFocusScope,
+            canRequestFocus: !blocksProtectedContent,
+            descendantsAreFocusable: !blocksProtectedContent,
+            child: IgnorePointer(
+              ignoring: blocksProtectedContent,
+              child: ExcludeSemantics(
+                excluding: blocksProtectedContent,
+                child: Semantics(
+                  container: true,
+                  identifier: _childSemanticsIdentifier,
+                  child: widget.child,
+                ),
+              ),
+            ),
+          ),
+          if (protectionPending)
+            const Positioned.fill(child: ColoredBox(color: Colors.black)),
           if (showCaptureOverlay)
             Positioned.fill(
               child: IgnorePointer(
                 child:
                     widget.overlayBuilder?.call(context) ??
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.92),
-                      ),
-                    ),
+                    const ColoredBox(color: Colors.black),
               ),
             ),
           if (widget.policy.enableRiskWatermark && riskyState)

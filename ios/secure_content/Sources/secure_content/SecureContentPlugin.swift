@@ -547,7 +547,7 @@ public class SecureContentPlugin: NSObject, FlutterPlugin, SecureContentHostApi 
   }
 
   private func removeCaptureOverlays(forDisconnectedScreens connectedScreenIDs: Set<ObjectIdentifier>) {
-    let windows = captureOverlays.keyEnumerator()?.allObjects.compactMap { $0 as? UIWindow } ?? []
+    let windows = captureOverlays.keyEnumerator().allObjects.compactMap { $0 as? UIWindow }
     for window in windows where !connectedScreenIDs.contains(ObjectIdentifier(window.screen)) {
       hideOverlay(kind: .capture, in: [window])
     }

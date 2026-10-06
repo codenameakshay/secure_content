@@ -66,6 +66,23 @@ dependencies:
   secure_content: ^2.1.0
 ```
 
+For Face ID authentication, add a usage description to the host app's
+`ios/Runner/Info.plist`:
+
+```xml
+<key>NSFaceIDUsageDescription</key>
+<string>Authenticate to access protected content.</string>
+```
+
+For biometric authentication on Android 23–27, the host activity must extend
+`FlutterFragmentActivity`. The example uses this activity on all Android versions:
+
+```kotlin
+import io.flutter.embedding.android.FlutterFragmentActivity
+
+class MainActivity : FlutterFragmentActivity()
+```
+
 ## Quick Start
 
 ```dart
@@ -98,6 +115,11 @@ watermark to its `child`. When the scope is enabled, it also enables native
 capture protection for the current app window. Native protection is not
 limited to the scope's `child`.
 
+While a scope is locked or hard-blocked, its child cannot receive focus,
+pointer input, or accessibility actions. Its accessibility content is hidden
+until access is restored. Custom lock and hard-block builders must paint an
+opaque cover that fills the scope.
+
 ## App Switcher Branding (iOS)
 
 On iOS, when the app moves to the background, the multitasking snapshot and
@@ -116,6 +138,9 @@ SecureContentScope(
   child: const YourSensitiveWidget(),
 )
 ```
+
+The native iOS privacy cover always uses an opaque background. The alpha
+component of `appSwitcherColor` does not make protected content visible.
 
 > Note: `appSwitcherImageName` is iOS-only. Android uses `FLAG_SECURE` for
 > capture and app-switcher protection. When `protectInAppSwitcher` is true,
@@ -140,6 +165,15 @@ await SecureContent.setSensitiveClipboard(
   clearAfter: const Duration(seconds: 10),
 );
 ```
+
+iOS uses system pasteboard expiration and keeps sensitive copies local to the
+device. Automatic cleanup preserves newer clipboard entries, including a new
+copy of the same text. A zero or negative `clearAfter` disables automatic expiry.
+
+Android restricts clipboard access while an app is in the background. If cleanup
+cannot access the clipboard, it remains pending until the app can access it
+again. The requested TTL is not a guaranteed background deletion deadline on
+Android. Process termination can also prevent app-scheduled cleanup.
 
 ## Events
 

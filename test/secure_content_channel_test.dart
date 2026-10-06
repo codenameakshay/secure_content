@@ -96,4 +96,76 @@ void main() {
     expect(configs.last.enabled, isTrue);
     expect(configs.last.appSwitcherColor, 0xFF445566);
   });
+
+  test(
+    'overlapping retry and rapid source removal leave protection disabled',
+    () async {
+      final first = SecureContentController();
+      final second = SecureContentController();
+      addTearDown(first.dispose);
+      addTearDown(second.dispose);
+
+      failNextConfigure = true;
+      final firstEnable = first.enable(
+        appSwitcherColor: const Color(0xFF112233),
+      );
+      final secondEnable = second.enable(
+        appSwitcherColor: const Color(0xFF445566),
+      );
+
+      await expectLater(firstEnable, throwsA(isA<PlatformException>()));
+      await secondEnable;
+      expect(configs, hasLength(1));
+      expect(configs.single.enabled, isTrue);
+      expect(configs.single.appSwitcherColor, 0xFF445566);
+
+      await Future.wait<void>([first.dispose(), second.dispose()]);
+      expect(configs.last.enabled, isFalse);
+      expect(configureCalls, 3);
+    },
+  );
+
+  test(
+    'latest opted-in source wins across many active source updates',
+    () async {
+      final sources = List<SecureContentController>.generate(
+        64,
+        (_) => SecureContentController(),
+      );
+      addTearDown(() async {
+        for (final source in sources) {
+          await source.dispose();
+        }
+      });
+
+      for (var index = 0; index < sources.length; index++) {
+        await sources[index].enable(
+          appSwitcherColor: Color(0xFF000000 | index),
+        );
+      }
+
+      for (final index in <int>[63, 0, 31, 1, 62, 7, 40]) {
+        await sources[index].setProtection(
+          true,
+          appSwitcherColor: Color(0xFF010000 | index),
+        );
+        expect(configs.last.appSwitcherColor, 0xFF010000 | index);
+      }
+
+      final optedOut = SecureContentController();
+      addTearDown(optedOut.dispose);
+      await optedOut.enable(
+        protectInAppSwitcher: false,
+        appSwitcherColor: const Color(0xFF777777),
+      );
+      expect(configs.last.appSwitcherColor, 0xFF010028);
+
+      await sources.first.setProtection(
+        true,
+        appSwitcherColor: const Color(0xFFABCDEF),
+      );
+
+      expect(configs.last.appSwitcherColor, 0xFFABCDEF);
+    },
+  );
 }

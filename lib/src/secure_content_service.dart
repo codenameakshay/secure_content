@@ -23,6 +23,7 @@ class SecureContentService {
   bool _appliedProtectInAppSwitcher = true;
   int _appliedAppSwitcherColor = Colors.black.toARGB32();
   String? _appliedAppSwitcherImageName;
+  int _sourceUpdateSequence = 0;
 
   // Serializes _sync() calls so overlapping updateSource/removeSource calls
   // apply in order against a consistent view of _sources, instead of racing
@@ -30,7 +31,7 @@ class SecureContentService {
   // continuation Future always resolves (errors are swallowed here so the
   // queue keeps moving); the Future returned to each _sync() caller is
   // separate and still carries that call's own failure.
-  Future<void> _syncQueue = Future<void>.value();
+  Future<void>? _syncQueue;
 
   Completer<SecureContentEventType>? _biometricRequest;
   StreamSubscription<SecureContentEvent>? _biometricResultSubscription;
@@ -77,7 +78,9 @@ class SecureContentService {
         Object _,
         StackTrace _,
       ) {
-        _completeBiometricRequest(SecureContentEventType.biometricAuthFailed);
+        if (identical(_biometricRequest, completer)) {
+          _completeBiometricRequest(SecureContentEventType.biometricAuthFailed);
+        }
       }),
     );
 
@@ -137,7 +140,7 @@ class SecureContentService {
       protectInAppSwitcher: protectInAppSwitcher,
       appSwitcherColor: appSwitcherColor,
       appSwitcherImageName: appSwitcherImageName,
-      updatedAt: DateTime.now(),
+      updateSequence: ++_sourceUpdateSequence,
     );
 
     await _sync();
@@ -151,8 +154,18 @@ class SecureContentService {
   Future<bool> isScreenCaptured() => _platform.isScreenCaptured();
 
   Future<void> _sync() {
-    final result = _syncQueue.then((_) => _syncOnce());
-    _syncQueue = result.catchError((Object _, StackTrace _) {});
+    final result = (_syncQueue ?? Future<void>.value()).then(
+      (_) => _syncOnce(),
+    );
+    final pending = result.catchError((Object _, StackTrace _) {});
+    _syncQueue = pending;
+    unawaited(
+      pending.then((_) {
+        if (identical(_syncQueue, pending)) {
+          _syncQueue = null;
+        }
+      }),
+    );
     return result;
   }
 
@@ -177,7 +190,7 @@ class SecureContentService {
     final _SecureSource? latest = appSwitcherSources.isEmpty
         ? null
         : (appSwitcherSources
-                ..sort((a, b) => a.updatedAt.compareTo(b.updatedAt)))
+                ..sort((a, b) => a.updateSequence.compareTo(b.updateSequence)))
               .last;
     final appSwitcherColor =
         latest?.appSwitcherColor.toARGB32() ?? Colors.black.toARGB32();
@@ -220,12 +233,12 @@ class _SecureSource {
     required this.protectInAppSwitcher,
     required this.appSwitcherColor,
     required this.appSwitcherImageName,
-    required this.updatedAt,
+    required this.updateSequence,
   });
 
   final bool enabled;
   final bool protectInAppSwitcher;
   final Color appSwitcherColor;
   final String? appSwitcherImageName;
-  final DateTime updatedAt;
+  final int updateSequence;
 }
