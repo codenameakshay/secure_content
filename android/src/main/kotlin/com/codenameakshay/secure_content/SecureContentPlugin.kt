@@ -1,6 +1,7 @@
 package com.codenameakshay.secure_content
 
 import android.app.Activity
+import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -9,10 +10,12 @@ import android.graphics.Color
 import android.hardware.biometrics.BiometricPrompt as FrameworkBiometricPrompt
 import android.os.CancellationSignal
 import android.os.Build
+import android.os.Bundle
 import android.os.Debug
 import android.os.Handler
 import android.os.Looper
-import android.view.WindowManager
+import android.os.SystemClock
+import android.view.ViewTreeObserver
 import androidx.annotation.NonNull
 import androidx.annotation.RequiresApi
 import androidx.biometric.BiometricManager
@@ -28,6 +31,11 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import java.time.Instant
 import java.io.File
+import java.util.Collections
+import java.util.IdentityHashMap
+import java.util.UUID
+
+internal const val CLIPBOARD_TOKEN_EXTRA = "com.codenameakshay.secure_content.clipboard_token"
 
 /** SecureContentPlugin */
 class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
@@ -39,24 +47,72 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var clipboardClearRunnable: Runnable? = null
 
     private var secureEnabled: Boolean = false
-    private var appSwitcherProtectionEnabled: Boolean = true
+    private var appSwitcherProtectionEnabled: Boolean = false
     private var appSwitcherColor: Int = Color.BLACK
-    private var originalNavigationBarColor: Int? = null
+    private val windowProtectionState = WindowProtectionState()
     private lateinit var appContext: Context
-    private var lastSensitiveClipboardContent: String? = null
+    private var lastSensitiveClipboardToken: String? = null
+    private var clipboardCleanupPending: Boolean = false
+    private var clipboardWindowFocused: Boolean = false
+    private val resumedActivities: MutableSet<Activity> = Collections.newSetFromMap(IdentityHashMap())
+    private val clipboardWindowFocusListeners = IdentityHashMap<Activity, ViewTreeObserver.OnWindowFocusChangeListener>()
+    private val focusedClipboardActivities: MutableSet<Activity> = Collections.newSetFromMap(IdentityHashMap())
+    private var lifecycleCallbacksRegistered: Boolean = false
+    private var engineAttached: Boolean = false
+    private var biometricGeneration: Long = 0
+    private var activeAndroidXPrompt: AndroidXBiometricPrompt? = null
+    private var activeFrameworkCancellation: CancellationSignal? = null
     private var platformReadyEmitted: Boolean = false
+
+    private val appLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+        override fun onActivityStarted(activity: Activity) = Unit
+        override fun onActivityResumed(activity: Activity) {
+            resumedActivities.add(activity)
+            if (lastSensitiveClipboardToken != null) watchWindowFocus(activity)
+        }
+        override fun onActivityPaused(activity: Activity) {
+            resumedActivities.remove(activity)
+            unwatchWindowFocus(activity)
+        }
+        override fun onActivityStopped(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+        override fun onActivityDestroyed(activity: Activity) {
+            resumedActivities.remove(activity)
+            unwatchWindowFocus(activity)
+        }
+    }
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         appContext = flutterPluginBinding.applicationContext
+        engineAttached = true
+        registerClipboardLifecycleCallbacks()
         flutterApi = SecureContentFlutterApi(flutterPluginBinding.binaryMessenger)
         SecureContentHostApi.setUp(flutterPluginBinding.binaryMessenger, this)
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
         SecureContentHostApi.setUp(binding.binaryMessenger, null)
-        clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
-        clipboardClearRunnable = null
+        cancelBiometricForActivityDetach()
+        clearSensitiveClipboard(emitEvent = false)
+        unregisterScreenshotCallbackIfAvailable()
+        engineAttached = false
+        releaseClipboardObserversAfterEngineDetach()
+        activity?.let { windowProtectionState.restore(it.window) }
+        activity = null
         flutterApi = null
+    }
+
+    private fun releaseClipboardObserversAfterEngineDetach() {
+        if (clipboardCleanupPending) {
+            registerClipboardLifecycleCallbacks()
+        } else {
+            clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
+            clipboardClearRunnable = null
+            unwatchAllClipboardWindows()
+            resumedActivities.clear()
+            unregisterClipboardLifecycleCallbacks()
+        }
     }
 
     override fun configureProtection(config: ProtectionConfig) {
@@ -132,10 +188,8 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         title: String,
         authenticators: Int,
     ) {
-        val promptInfo = AndroidXBiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setAllowedAuthenticators(authenticators)
-            .build()
+        val promptInfo = createAndroidXPromptInfo(title, authenticators)
+        val generation = ++biometricGeneration
 
         val biometricPrompt = AndroidXBiometricPrompt(
             fragmentActivity,
@@ -143,17 +197,31 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             object : AndroidXBiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: AndroidXBiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
-                    emitEvent("biometricAuthSucceeded")
+                    finishBiometric(generation, "biometricAuthSucceeded")
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
-                    emitEvent("biometricAuthFailed")
+                    finishBiometric(generation, "biometricAuthFailed")
                 }
 
             },
         )
+        activeAndroidXPrompt = biometricPrompt
         biometricPrompt.authenticate(promptInfo)
+    }
+
+    internal fun createAndroidXPromptInfo(
+        title: String,
+        authenticators: Int,
+    ): AndroidXBiometricPrompt.PromptInfo {
+        val builder = AndroidXBiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setAllowedAuthenticators(authenticators)
+        if ((authenticators and BiometricManager.Authenticators.DEVICE_CREDENTIAL) == 0) {
+            builder.setNegativeButtonText("Cancel")
+        }
+        return builder.build()
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
@@ -161,15 +229,16 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         currentActivity: Activity,
         title: String,
     ) {
+        val generation = ++biometricGeneration
         val callback = object : FrameworkBiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: FrameworkBiometricPrompt.AuthenticationResult?) {
                 super.onAuthenticationSucceeded(result)
-                emitEvent("biometricAuthSucceeded")
+                finishBiometric(generation, "biometricAuthSucceeded")
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
                 super.onAuthenticationError(errorCode, errString)
-                emitEvent("biometricAuthFailed")
+                finishBiometric(generation, "biometricAuthFailed")
             }
         }
 
@@ -183,16 +252,36 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
                 "Cancel",
                 currentActivity.mainExecutor,
             ) { _, _ ->
-                emitEvent("biometricAuthFailed")
+                finishBiometric(generation, "biometricAuthFailed")
             }
         }
 
         val prompt = promptBuilder.build()
+        val cancellationSignal = CancellationSignal()
+        activeFrameworkCancellation = cancellationSignal
         prompt.authenticate(
-            CancellationSignal(),
+            cancellationSignal,
             currentActivity.mainExecutor,
             callback,
         )
+    }
+
+    private fun finishBiometric(generation: Long, event: String) {
+        if (generation != biometricGeneration) return
+        activeAndroidXPrompt = null
+        activeFrameworkCancellation = null
+        emitEvent(event)
+    }
+
+    private fun cancelBiometricForActivityDetach() {
+        val hadPrompt = activeAndroidXPrompt != null || activeFrameworkCancellation != null
+        if (!hadPrompt) return
+        biometricGeneration += 1
+        activeAndroidXPrompt?.cancelAuthentication()
+        activeAndroidXPrompt = null
+        activeFrameworkCancellation?.cancel()
+        activeFrameworkCancellation = null
+        emitEvent("biometricUnavailable")
     }
 
     override fun checkIntegrity() {
@@ -202,66 +291,155 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
     override fun setSensitiveClipboard(content: String, clearAfterMs: Long) {
         val clipboardManager = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clipData = ClipData.newPlainText("secure_content", content)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val extras = PersistableBundle()
-            extras.putBoolean("android.content.extra.IS_SENSITIVE", true)
-            clipData.description.extras = extras
-        }
+        val token = UUID.randomUUID().toString()
+        val clipData = createSensitiveClipboardClip(content, token)
         clipboardManager.setPrimaryClip(clipData)
-        lastSensitiveClipboardContent = content
+        lastSensitiveClipboardToken = token
+        clipboardCleanupPending = false
+        registerClipboardLifecycleCallbacks()
+        resumedActivities.forEach(::watchWindowFocus)
+        activity?.let(::watchWindowFocus)
         emitEvent("clipboardSet")
 
         clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
         if (clearAfterMs > 0) {
             val runnable = Runnable {
+                clipboardClearRunnable = null
                 clearSensitiveClipboard()
             }
             clipboardClearRunnable = runnable
-            clipboardHandler.postDelayed(runnable, clearAfterMs)
+            val now = SystemClock.uptimeMillis()
+            val safeDelay = clearAfterMs.coerceAtMost(Long.MAX_VALUE - now)
+            clipboardHandler.postAtTime(runnable, now + safeDelay)
         }
     }
 
     override fun clearSensitiveClipboard() {
-        val clipboardManager = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val expected = lastSensitiveClipboardContent
-        if (expected != null && currentClipboardText(clipboardManager) == expected) {
-            clipboardManager.setPrimaryClip(ClipData.newPlainText("secure_content", ""))
-        }
-        lastSensitiveClipboardContent = null
-        clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
-        clipboardClearRunnable = null
-        emitEvent("clipboardCleared")
+        clearSensitiveClipboard(emitEvent = true)
     }
 
-    private fun currentClipboardText(clipboardManager: ClipboardManager): String? {
-        val clip = clipboardManager.primaryClip ?: return null
-        if (clip.itemCount == 0) return null
-        return clip.getItemAt(0).coerceToText(appContext)?.toString()
+    private fun clearSensitiveClipboard(emitEvent: Boolean) {
+        val clipboardManager = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val expectedToken = lastSensitiveClipboardToken
+        if (expectedToken != null &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            !clipboardWindowFocused
+        ) {
+            clipboardCleanupPending = true
+            return
+        }
+
+        val currentClip = if (expectedToken == null) null else clipboardManager.primaryClip
+        val actualToken = currentClip?.takeIf { it.itemCount > 0 }?.let(::sensitiveClipboardToken)
+        if (expectedToken != null && actualToken == expectedToken) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                clipboardManager.clearPrimaryClip()
+            } else {
+                clipboardManager.setPrimaryClip(ClipData.newPlainText("secure_content", ""))
+            }
+        }
+        lastSensitiveClipboardToken = null
+        clipboardCleanupPending = false
+        clipboardClearRunnable?.let { clipboardHandler.removeCallbacks(it) }
+        clipboardClearRunnable = null
+        if (!engineAttached) unregisterClipboardLifecycleCallbacks()
+        unwatchAllClipboardWindows()
+        if (emitEvent) emitEvent("clipboardCleared")
+    }
+
+    private fun registerClipboardLifecycleCallbacks() {
+        val application = appContext as? Application ?: return
+        if (lifecycleCallbacksRegistered) return
+        application.registerActivityLifecycleCallbacks(appLifecycleCallbacks)
+        lifecycleCallbacksRegistered = true
+    }
+
+    private fun unregisterClipboardLifecycleCallbacks() {
+        val application = appContext as? Application ?: return
+        if (!lifecycleCallbacksRegistered) return
+        application.unregisterActivityLifecycleCallbacks(appLifecycleCallbacks)
+        lifecycleCallbacksRegistered = false
+    }
+
+    private fun watchWindowFocus(activity: Activity) {
+        if (clipboardWindowFocusListeners.containsKey(activity)) {
+            val decor = activity.window.decorView
+            if (decor.hasWindowFocus()) onClipboardWindowFocus(activity, true)
+            return
+        }
+        val listener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            onClipboardWindowFocus(activity, hasFocus)
+        }
+        clipboardWindowFocusListeners[activity] = listener
+        activity.window.decorView.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+        onClipboardWindowFocus(activity, activity.window.decorView.hasWindowFocus())
+    }
+
+    private fun unwatchWindowFocus(activity: Activity) {
+        val listener = clipboardWindowFocusListeners.remove(activity) ?: return
+        val observer = activity.window.decorView.viewTreeObserver
+        if (observer.isAlive) {
+            observer.removeOnWindowFocusChangeListener(listener)
+        }
+        focusedClipboardActivities.remove(activity)
+        clipboardWindowFocused = focusedClipboardActivities.isNotEmpty()
+    }
+
+    private fun unwatchAllClipboardWindows() {
+        clipboardWindowFocusListeners.keys.toList().forEach(::unwatchWindowFocus)
+        focusedClipboardActivities.clear()
+        clipboardWindowFocused = false
+    }
+
+    private fun onClipboardWindowFocus(activity: Activity, hasFocus: Boolean) {
+        if (!clipboardWindowFocusListeners.containsKey(activity)) return
+        if (hasFocus) focusedClipboardActivities.add(activity) else focusedClipboardActivities.remove(activity)
+        clipboardWindowFocused = focusedClipboardActivities.isNotEmpty()
+        if (clipboardWindowFocused && clipboardCleanupPending) {
+            clearSensitiveClipboard()
+        }
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         registerScreenshotCallbackIfAvailable()
         applyProtection()
+        if (lastSensitiveClipboardToken != null) {
+            watchWindowFocus(binding.activity)
+        }
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        cancelBiometricForActivityDetach()
         unregisterScreenshotCallbackIfAvailable()
+        activity?.let { detachedActivity ->
+            if (lastSensitiveClipboardToken == null) {
+                unwatchWindowFocus(detachedActivity)
+            }
+        }
+        activity?.let { windowProtectionState.restore(it.window) }
         activity = null
-        originalNavigationBarColor = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
         registerScreenshotCallbackIfAvailable()
         applyProtection()
+        if (lastSensitiveClipboardToken != null) {
+            watchWindowFocus(binding.activity)
+        }
     }
 
     override fun onDetachedFromActivity() {
+        cancelBiometricForActivityDetach()
         unregisterScreenshotCallbackIfAvailable()
+        activity?.let { detachedActivity ->
+            if (lastSensitiveClipboardToken == null) {
+                unwatchWindowFocus(detachedActivity)
+            }
+        }
+        activity?.let { windowProtectionState.restore(it.window) }
         activity = null
-        originalNavigationBarColor = null
     }
 
     private fun registerScreenshotCallbackIfAvailable() {
@@ -339,20 +517,12 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private fun applyProtection() {
         val currentActivity = activity ?: return
         currentActivity.runOnUiThread {
-            if (secureEnabled) {
-                currentActivity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            } else {
-                currentActivity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            }
-
-            if (appSwitcherProtectionEnabled) {
-                if (originalNavigationBarColor == null) {
-                    originalNavigationBarColor = currentActivity.window.navigationBarColor
-                }
-                currentActivity.window.navigationBarColor = appSwitcherColor
-            } else {
-                originalNavigationBarColor?.let { currentActivity.window.navigationBarColor = it }
-            }
+            windowProtectionState.apply(
+                currentActivity.window,
+                secureEnabled = secureEnabled,
+                appSwitcherProtected = appSwitcherProtectionEnabled,
+                appSwitcherColor = appSwitcherColor,
+            )
         }
     }
 
@@ -410,4 +580,27 @@ internal fun isEmulatorBuild(
         normalizedProduct.contains("emulator") ||
         normalizedHardware.contains("goldfish") ||
         normalizedHardware.contains("ranchu")
+}
+
+internal fun createSensitiveClipboardClip(content: String, token: String): ClipData {
+    val clip = ClipData.newPlainText("secure_content:$token", content)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        val extras = PersistableBundle()
+        extras.putBoolean("android.content.extra.IS_SENSITIVE", true)
+        extras.putString(CLIPBOARD_TOKEN_EXTRA, token)
+        clip.description.extras = extras
+    }
+    return clip
+}
+
+internal fun sensitiveClipboardToken(clip: ClipData): String? {
+    val extrasToken = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        clip.description.extras?.getString(CLIPBOARD_TOKEN_EXTRA)
+    } else {
+        null
+    }
+    if (extrasToken != null) return extrasToken
+    val label = clip.description.label?.toString() ?: return null
+    return label.takeIf { it.startsWith("secure_content:") }
+        ?.removePrefix("secure_content:")
 }

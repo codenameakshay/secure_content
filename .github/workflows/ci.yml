@@ -48,5 +48,13 @@ jobs:
       - run: fvm flutter pub get
       - run: fvm flutter pub get
         working-directory: example
+      - run: swift test --package-path ios
       - run: fvm flutter build ios --simulator --no-codesign
         working-directory: example
+      - run: ./scripts/test_ios.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-runtime-test-results
+          path: ${{ runner.temp }}/secure-content-ios-tests.xcresult
+          if-no-files-found: warn
