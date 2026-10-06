@@ -15,7 +15,7 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -33,11 +33,13 @@ jobs:
       - run: make FLUTTER=flutter DART=dart check
       - run: make DART=dart pigeon-check
       - run: flutter build apk --debug
+        timeout-minutes: 5
         working-directory: example
       - run: ./gradlew :secure_content:testDebugUnitTest :secure_content:lintDebug
         working-directory: example/android
       - uses: actions/upload-artifact@v7
         if: always()
+        timeout-minutes: 2
         with:
           name: android-native-test-results
           path: |
@@ -48,7 +50,7 @@ jobs:
   ios:
     needs: checks
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
     steps:
@@ -63,8 +65,10 @@ jobs:
         working-directory: example
       - run: swift test --package-path ios
       - run: flutter build ios --simulator --no-codesign
+        timeout-minutes: 5
         working-directory: example
       - run: ./scripts/test_ios.sh
+        timeout-minutes: 5
       - name: Export simulator screenshots
         if: always()
         run: |
@@ -75,12 +79,14 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         if: always()
+        timeout-minutes: 2
         with:
           name: ios-runtime-test-results
           path: ${{ runner.temp }}/secure-content-ios-tests.xcresult
           if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: always()
+        timeout-minutes: 2
         with:
           name: ios-runtime-screenshots
           path: ${{ runner.temp }}/secure-content-ios-screenshots

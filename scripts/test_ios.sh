@@ -64,6 +64,10 @@ print(selected)
   -scheme "$scheme" \
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "$package_dir/DerivedData" \
+  -destination-timeout 60 \
   -parallel-testing-enabled NO \
+  -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 15 \
+  -maximum-test-execution-time-allowance 30 \
   -resultBundlePath "$result_bundle" \
   CODE_SIGNING_ALLOWED=NO)

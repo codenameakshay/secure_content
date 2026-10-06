@@ -99,6 +99,15 @@ results must come from the macOS CI job. The first CI build caught an invalid
 optional chain on Swift's nonoptional `keyEnumerator()`; this is corrected.
 Native CI on the final revision remains required before marking the PR ready.
 
+Android CI on `66db971` passed the Dart gates, example APK build, and native
+unit tests. The iOS example build and policy tests also passed. The simulator
+suite passed its first two synchronous tests, then stalled in the first async
+clipboard test. All four duplicate/stale runs were cancelled. The clipboard
+tests now use bounded XCTest waits instead of async actor sleeps; this correction
+requires a new simulator run. CI runs once per PR revision, cancels superseded
+runs, reuses the pinned Flutter installation, caps each job at 15 minutes, and
+caps the simulator step at five minutes with individual test timeouts.
+
 The four Foundation-only native policy tests pass with
 `swift test --package-path ios`. These do not validate UIKit or Flutter engine
 integration. Android unit-test execution is blocked locally because the installed

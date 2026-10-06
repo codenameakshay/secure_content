@@ -6,24 +6,32 @@ import XCTest
 
 @MainActor
 final class SecureContentPluginRuntimeTests: XCTestCase {
-  func testSensitiveClipboardUsesSystemExpiration() async throws {
+  func testSensitiveClipboardUsesSystemExpiration() throws {
     var plugin: SecureContentPlugin? = SecureContentPlugin()
     try plugin?.setSensitiveClipboard(content: "expires from pasteboard", clearAfterMs: 700)
     plugin = nil
 
-    try await Task.sleep(nanoseconds: 1_500_000_000)
+    let expirationWait = expectation(description: "pasteboard expiration")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      expirationWait.fulfill()
+    }
+    wait(for: [expirationWait], timeout: 3.5)
 
     XCTAssertTrue(UIPasteboard.general.items.isEmpty)
   }
 
-  func testExpiredTimerPreservesANewerIdenticalClipboardCopy() async throws {
+  func testExpiredTimerPreservesANewerIdenticalClipboardCopy() throws {
     let plugin = SecureContentPlugin()
     try plugin.setSensitiveClipboard(content: "same text", clearAfterMs: 700)
     let originalChangeCount = UIPasteboard.general.changeCount
     UIPasteboard.general.setItems([["public.utf8-plain-text": "same text"]], options: [:])
     XCTAssertNotEqual(UIPasteboard.general.changeCount, originalChangeCount)
 
-    try await Task.sleep(nanoseconds: 1_200_000_000)
+    let expirationWait = expectation(description: "owned clipboard timer expires")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+      expirationWait.fulfill()
+    }
+    wait(for: [expirationWait], timeout: 3.2)
 
     XCTAssertEqual(UIPasteboard.general.string, "same text")
   }
