@@ -323,6 +323,48 @@ class SecureContentPluginLifecycleTest {
         assertEquals(listOf("platformReady"), messenger.eventTypes)
 
         controller.windowFocusChanged(true)
+        plugin.requestBiometricAuth("Authenticate")
+        assertEquals(hostChildren, decor.children())
+        controller.windowFocusChanged(false)
+
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertEquals(
+            listOf("platformReady", "appSwitcherProtected"),
+            messenger.eventTypes.filterNot { it == "biometricUnavailable" },
+        )
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun aPromptRequestedBeforeTheFirstFocusReportCoversTheLaunchingWindow() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val decor = controller.get().window.decorView as ViewGroup
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        controller.visible()
+        val hostChildren = decor.children()
+
+        plugin.requestBiometricAuth("Authenticate")
+
+        assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        controller.windowFocusChanged(true)
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun aPromptRequestedWhileFocusedWaitsForThePromptToTakeFocus() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+
+        plugin.requestBiometricAuth("Authenticate")
+        assertEquals(hostChildren, decor.children())
         controller.windowFocusChanged(false)
 
         assertEquals(hostChildren.size + 1, decor.childCount)

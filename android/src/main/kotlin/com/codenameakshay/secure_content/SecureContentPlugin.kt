@@ -33,10 +33,12 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var observedDecor: View? = null
     private var windowFocused = true
+    private var windowFocusKnown = false
     private var inMultiWindow = false
     private var coverReported = false
     private val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
         windowFocused = hasFocus
+        windowFocusKnown = true
         applyProtection()
     }
     private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -76,6 +78,12 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun isScreenCaptured(): Boolean = false
 
     override fun requestBiometricAuth(reason: String) {
+        if (activity != null && !windowFocusKnown) {
+            // A prompt opened at launch can take focus before the window reports any, so no focus
+            // change would follow. Cover now; the next focus report decides.
+            windowFocused = false
+            applyProtection()
+        }
         biometricAuthentication.request(activity, reason)
     }
 
@@ -118,6 +126,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         }
         observedDecor = null
         windowFocused = true
+        windowFocusKnown = false
         activity?.let {
             clipboard?.onActivityDetached(it)
             windowProtectionState.restore(it.window)
@@ -139,9 +148,12 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             return
         }
         observedDecor = decor
-        // A new window gets focus only after its first frame. Treating it as unfocused until then
-        // would flash the cover at every launch.
-        windowFocused = !decor.isAttachedToWindow || decor.hasWindowFocus()
+        // A window that is not attached yet gets focus only after its first frame. Treating it as
+        // unfocused until then would flash the cover at every launch.
+        if (decor.isAttachedToWindow) {
+            windowFocused = decor.hasWindowFocus()
+            windowFocusKnown = true
+        }
         decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
         decor.addOnLayoutChangeListener(layoutListener)
     }
