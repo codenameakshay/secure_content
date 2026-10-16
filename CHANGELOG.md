@@ -1,6 +1,7 @@
 ## Unreleased
 
 - Emit `idleLockActivated` and `idleLockReleased` once for each lock change. Resuming after the idle deadline, or reaching it while already locked, no longer repeats `idleLockActivated`. A scope that starts locked now emits `idleLockActivated`, and disabling a locked scope emits `idleLockReleased`.
+- Keep the normal lock screen when an Android activity is recreated during a biometric prompt, instead of reporting that biometrics are unavailable. A request that the canceled prompt still blocks now returns `biometricAuthFailed`, and the next request opens a new prompt.
 
 ## 3.0.0
 
