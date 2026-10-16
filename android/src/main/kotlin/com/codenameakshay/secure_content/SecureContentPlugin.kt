@@ -139,7 +139,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             return
         }
         observedDecor = decor
-        windowFocused = !decor.isAttachedToWindow || decor.hasWindowFocus()
+        windowFocused = decor.hasWindowFocus()
         decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
         decor.addOnLayoutChangeListener(layoutListener)
     }

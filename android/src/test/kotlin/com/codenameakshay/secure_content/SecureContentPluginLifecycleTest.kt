@@ -232,16 +232,29 @@ class SecureContentPluginLifecycleTest {
         }
         assertNull(decorAfterAttach)
         plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
 
         controller.start().resume().visible()
         shadowOf(Looper.getMainLooper()).idle()
-        val decor = controller.get().window.decorView as ViewGroup
+
+        assertFalse(decor.hasWindowFocus())
+        val initialCover = decor.children().single { it !in hostChildren }
+        assertSame(initialCover, decor.getChildAt(decor.childCount - 1))
+        assertEquals(0xff000000.toInt(), (initialCover.background as ColorDrawable).color)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+
         controller.windowFocusChanged(true)
-        val hostChildren = decor.children()
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+
         controller.windowFocusChanged(false)
 
         assertEquals(hostChildren.size + 1, decor.childCount)
-        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        assertEquals(
+            listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "appSwitcherProtected"),
+            messenger.eventTypes,
+        )
         plugin.onDetachedFromEngine(binding)
     }
 
