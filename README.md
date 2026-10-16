@@ -155,16 +155,38 @@ SecureContentScope(
 The native iOS privacy cover always uses an opaque background. The alpha
 component of `appSwitcherColor` does not make protected content visible.
 
-> Note: `appSwitcherImageName` is iOS-only. Android uses `FLAG_SECURE` for
-> capture and app-switcher protection. When `protectInAppSwitcher` is true,
-> Android also sets the navigation-bar color to `appSwitcherColor`. Android
-> does not add a branded app-switcher overlay, and it ignores the image name.
->
-> On Android 12 and later, `FLAG_SECURE` blanks the snapshot that Recents
-> stores for the app. If the user opens Recents directly from the app, the
-> system shows the running app as a live preview until the app leaves the
-> foreground. This preview is the app's own screen, not a captured image, so
-> it can show protected content.
+> Note: `appSwitcherImageName` is iOS-only. Android ignores it.
+
+## Android App Switcher Cover
+
+Android uses `FLAG_SECURE` for capture protection and for the snapshot that
+Recents stores. When `protectInAppSwitcher` is true, Android also sets the
+navigation-bar color to `appSwitcherColor`. While the app window does not have
+focus, Android covers the full window with an opaque `appSwitcherColor` fill
+and emits `appSwitcherProtected`. When the window gets focus again, Android
+removes the cover and emits `appSwitcherUnprotected`. The alpha component of
+`appSwitcherColor` is ignored.
+
+If the user opens Recents directly from the app, Android shows the running app
+as a live preview, not the stored snapshot. The cover hides protected content
+in this preview. With gesture navigation, the cover is in place when the
+gesture starts. With three-button navigation, Android removes focus from the
+app after the Recents animation starts, so the first frames of the animation
+can show the app.
+
+The cover also appears when the notification shade, a system dialog, a
+biometric prompt, or another window of the app (such as a native dialog) takes
+focus. While the cover is shown, the app content is hidden from accessibility
+services.
+
+In multi-window mode, such as split screen, the app stays visible while another
+window has focus. Android does not add the cover in this mode, so the Recents
+live preview of a split-screen pair can show protected content.
+
+The cover cannot hide a Flutter view that uses a transparent `SurfaceView`
+(`RenderMode.surface` with `TransparencyMode.transparent`), because that
+surface draws above the window. `FlutterActivity` with a transparent background
+uses a `TextureView`, which the cover hides.
 
 ## Global Protection
 
@@ -210,6 +232,7 @@ Key event types include:
 - `biometricAuthSucceeded` / `biometricAuthFailed` / `biometricUnavailable`
 - `integritySafe` / `integrityRiskDetected`
 - `clipboardSet` / `clipboardCleared`
+- `appSwitcherProtected` / `appSwitcherUnprotected`
 - `idleLockActivated` / `idleLockReleased`
 
 ## Platform Support
