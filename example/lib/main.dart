@@ -278,10 +278,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? (context) => _buildCustomHardBlockScreen(context)
                     : null,
                 child: Card(
-                  child: Center(
-                    child: Text(
-                      'Secure counter: $_counter',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                  semanticContainer: false,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Secure counter: $_counter',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        const TextField(
+                          decoration: InputDecoration(
+                            labelText: 'Secret note',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
