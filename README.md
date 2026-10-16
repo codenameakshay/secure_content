@@ -166,25 +166,25 @@ activity window does not have focus, Android covers the full window with an
 opaque `appSwitcherColor` fill. When the window gets focus again, Android
 removes the cover. The alpha component of `appSwitcherColor` is ignored.
 
-A new window is not covered before Android first reports its focus, so the
-cover does not flash at launch. If the plugin opens a biometric prompt before
-that first report, the window is covered at once. If another window, such as
-the notification shade, has focus when a new window opens, the new window
-stays uncovered until its focus changes.
+On first observation, the plugin leaves an unattached decor uncovered to avoid
+a cover flash at launch. It covers an already attached decor without focus at
+once. If the plugin requests a biometric prompt before the window's focus is
+known, it covers the window at once. If no focus report arrives, this launch-time
+cover ends when the biometric request finishes.
 
 Each engine emits `appSwitcherProtected` when its cover request starts and
 `appSwitcherUnprotected` when the request ends. A request also ends when
-protection is disabled or the activity detaches. Detaching the engine removes
-its cover without more events. If two engines share a window, the window stays
+protection is disabled or the activity detaches. Detaching the engine ends its
+request without more events. If two engines share a window, the window stays
 covered while either request is active.
 
-When the user opens Recents directly from the app, launchers on Android 12 and
-later show the running app as a live preview, not the stored snapshot. The
-cover hides protected content in this preview. With the Pixel launcher on
-Android 16, gesture navigation removes focus from the app when the gesture
-starts, so the cover is in place for the whole animation. The Recents button
-removes focus after the animation starts, so the first frames of the animation
-can show the app. Other launchers can behave differently.
+On Android 12 and later, some devices and launchers show the running app as a
+live Recents preview, not the stored snapshot. The cover hides protected
+content after the app window loses focus. In our observed Pixel launcher flow
+on Android 16, gesture navigation removes focus when the gesture starts, so
+the cover is in place for the whole animation. The Recents button removes
+focus after the animation starts, so the first frames of the animation can
+show the app. Other launchers can behave differently.
 
 The cover also appears when the notification shade, a system dialog, a
 biometric prompt, or another window of the app (such as a native dialog) takes

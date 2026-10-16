@@ -24,7 +24,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var flutterApi: SecureContentFlutterApi? = null
     private var screenshotCallback: Activity.ScreenCaptureCallback? = null
     private var clipboard: SensitiveClipboard? = null
-    private val biometricAuthentication = BiometricAuthentication(::emitEvent)
+    private val biometricAuthentication = BiometricAuthentication(::onBiometricEvent)
     private val windowProtectionState = WindowProtectionState()
     private var secureEnabled = false
     private var appSwitcherProtectionEnabled = false
@@ -34,11 +34,13 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var observedDecor: View? = null
     private var windowFocused = true
     private var windowFocusKnown = false
+    private var launchPromptCover = false
     private var inMultiWindow = false
     private var coverReported = false
     private val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
         windowFocused = hasFocus
         windowFocusKnown = true
+        launchPromptCover = false
         applyProtection()
     }
     private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -80,8 +82,8 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun requestBiometricAuth(reason: String) {
         if (activity != null && !windowFocusKnown) {
             // A prompt opened at launch can take focus before the window reports any, so no focus
-            // change would follow. Cover now; the next focus report decides.
-            windowFocused = false
+            // change would follow. Cover now without changing the actual window focus state.
+            launchPromptCover = true
             applyProtection()
         }
         biometricAuthentication.request(activity, reason)
@@ -127,6 +129,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         observedDecor = null
         windowFocused = true
         windowFocusKnown = false
+        launchPromptCover = false
         activity?.let {
             clipboard?.onActivityDetached(it)
             windowProtectionState.restore(it.window)
@@ -150,7 +153,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         observedDecor = decor
         // A window that is not attached yet gets focus only after its first frame. Treating it as
         // unfocused until then would flash the cover at every launch.
-        if (decor.isAttachedToWindow) {
+        if (decor.isAttachedToWindow && !launchPromptCover) {
             windowFocused = decor.hasWindowFocus()
             windowFocusKnown = true
         }
@@ -162,7 +165,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         val activity = activity ?: return
         // Split screen and other multi-window modes leave the app visible without focus.
         inMultiWindow = isInMultiWindow(activity)
-        val inactive = !windowFocused && !inMultiWindow
+        val inactive = (!windowFocused || launchPromptCover) && !inMultiWindow
         windowProtectionState.apply(
             activity.window,
             secureEnabled = secureEnabled,
@@ -210,6 +213,19 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
         val callback = screenshotCallback ?: return
         activity?.unregisterScreenCaptureCallback(callback)
         screenshotCallback = null
+    }
+
+    private fun onBiometricEvent(type: NativeEvent) {
+        if (type == NativeEvent.BIOMETRIC_SUCCEEDED ||
+            type == NativeEvent.BIOMETRIC_FAILED ||
+            type == NativeEvent.BIOMETRIC_UNAVAILABLE
+        ) {
+            if (launchPromptCover) {
+                launchPromptCover = false
+                applyProtection()
+            }
+        }
+        emitEvent(type)
     }
 
     private fun emitEvent(type: NativeEvent) {

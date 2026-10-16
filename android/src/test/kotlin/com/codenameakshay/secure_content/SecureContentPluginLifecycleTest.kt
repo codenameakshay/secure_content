@@ -5,7 +5,9 @@ import android.app.Application
 import android.content.pm.PackageManager
 import android.graphics.drawable.ColorDrawable
 import android.hardware.biometrics.BiometricPrompt
+import android.os.Handler
 import android.os.Looper
+import android.os.Message
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -373,6 +375,26 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
+    fun aPromptTerminalDoesNotRemoveACoverOwnedByActualFocusLoss() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+
+        plugin.requestBiometricAuth("Authenticate")
+        assertEquals(hostChildren, decor.children())
+        controller.windowFocusChanged(false)
+        val cover = decor.children().single { it !in hostChildren }
+        currentPromptCallback().onAuthenticationSucceeded(null)
+
+        assertSame(cover, decor.getChildAt(decor.childCount - 1))
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, decor.importantForAccessibility)
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "biometricAuthSucceeded"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
     fun anAttachedWindowWithoutFocusIsCoveredWhenThePluginAttaches() {
         val controller = Robolectric.buildActivity(Activity::class.java).setup()
         val decor = controller.get().window.decorView as ViewGroup
@@ -627,6 +649,242 @@ class SecureContentPluginLifecycleTest {
         plugin.requestBiometricAuth("Authenticate")
 
         assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    @Config(sdk = [23])
+    fun unavailablePromptBeforeFirstFocusReportRemovesOnlyItsSyntheticCover() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java)
+        controller.get().setTheme(android.R.style.Theme_Material_Light_NoActionBar)
+        controller.create().start().resume()
+        val activity = controller.get()
+        plugin.onAttachedToActivity(activityBinding(activity))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        controller.visible()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+
+        plugin.requestBiometricAuth("Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(hostAccessibility, decor.importantForAccessibility)
+        assertEquals(
+            listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "biometricUnavailable"),
+            messenger.eventTypes,
+        )
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun aPromptTerminalWithoutFocusChangeRemovesItsCoverAndIgnoresDuplicateCallbacks() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val activity = controller.get()
+        plugin.onAttachedToActivity(activityBinding(activity))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        controller.visible()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+
+        plugin.requestBiometricAuth("Authenticate")
+        val prompt = ShadowBiometricPrompt.getCurrentPrompt()
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        plugin.requestBiometricAuth("Duplicate request")
+        assertSame(prompt, ShadowBiometricPrompt.getCurrentPrompt())
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        val callback = currentPromptCallback()
+        callback.onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_CANCELED, "Canceled")
+        callback.onAuthenticationSucceeded(null)
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(hostAccessibility, decor.importantForAccessibility)
+        assertEquals(
+            listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "biometricAuthFailed"),
+            messenger.eventTypes,
+        )
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun promptCoverFollowsProtectionConfigurationAndEndsWithItsPrompt() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val activity = controller.get()
+        plugin.onAttachedToActivity(activityBinding(activity))
+        plugin.configureProtection(ProtectionConfig(false, true, 0xff123456))
+        controller.visible()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+
+        plugin.requestBiometricAuth("Protection disabled")
+        currentPromptCallback().onAuthenticationSucceeded(null)
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        assertEquals(hostChildren, decor.children())
+
+        plugin.configureProtection(ProtectionConfig(false, true, 0xff123456))
+        plugin.requestBiometricAuth("Enable protection while pending")
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_CANCELED, "Canceled")
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(hostAccessibility, decor.importantForAccessibility)
+        assertEquals(
+            listOf(
+                "platformReady",
+                "biometricAuthSucceeded",
+                "appSwitcherProtected",
+                "appSwitcherUnprotected",
+                "biometricAuthFailed",
+            ),
+            messenger.eventTypes,
+        )
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun deferredObservationCannotTreatAQueuedFocusStateAsAPromptTerminal() {
+        var deferredObservation: Runnable? = null
+        ReflectionHelpers.setField(
+            plugin,
+            "mainHandler",
+            object : Handler(Looper.getMainLooper()) {
+                override fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean {
+                    deferredObservation = checkNotNull(msg.callback)
+                    return true
+                }
+            },
+        )
+        AttachDuringCreateActivity.onCreateHook = {
+            plugin.onAttachedToActivity(activityBinding(it))
+        }
+        val controller = try {
+            Robolectric.buildActivity(AttachDuringCreateActivity::class.java).create()
+        } finally {
+            AttachDuringCreateActivity.onCreateHook = null
+        }
+        controller.start().resume().visible()
+        val activity = controller.get()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+        controller.windowFocusChanged(true)
+        assertTrue(decor.isAttachedToWindow)
+        assertTrue(decor.hasWindowFocus())
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+
+        plugin.requestBiometricAuth("Authenticate")
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        checkNotNull(deferredObservation).run()
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, decor.importantForAccessibility)
+
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_CANCELED, "Canceled")
+        assertEquals(hostChildren, decor.children())
+        assertEquals(hostAccessibility, decor.importantForAccessibility)
+        assertEquals(
+            listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "biometricAuthFailed"),
+            messenger.eventTypes,
+        )
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun rejectedEnginePromptCannotResurrectACoverAfterTheOwnerTerminates() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val activity = controller.get()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        plugin.onAttachedToActivity(activityBinding(activity))
+        val secondMessenger = EventMessenger()
+        val secondBinding = engineBinding(secondMessenger)
+        val secondPlugin = SecureContentPlugin().also { it.onAttachedToEngine(secondBinding) }
+        secondPlugin.onAttachedToActivity(activityBinding(activity))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        secondPlugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+        controller.visible()
+
+        try {
+            plugin.requestBiometricAuth("Owner")
+            assertEquals(hostChildren.size + 1, decor.childCount)
+            secondPlugin.requestBiometricAuth("Rejected")
+            assertEquals(
+                listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "biometricUnavailable"),
+                secondMessenger.eventTypes,
+            )
+
+            currentPromptCallback().onAuthenticationSucceeded(null)
+            assertEquals(hostChildren, decor.children())
+
+            assertEquals(
+                listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "biometricAuthSucceeded"),
+                messenger.eventTypes,
+            )
+            assertEquals(
+                listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "biometricUnavailable"),
+                secondMessenger.eventTypes,
+            )
+        } finally {
+            plugin.onDetachedFromEngine(binding)
+            secondPlugin.onDetachedFromEngine(secondBinding)
+        }
+    }
+
+    @Test
+    fun engineDetachRemovesAPendingPromptCoverWithoutNotifyingDetachedDart() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val activity = controller.get()
+        plugin.onAttachedToActivity(activityBinding(activity))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        controller.visible()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+
+        plugin.requestBiometricAuth("Authenticate")
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        val eventsBeforeDetach = messenger.eventTypes
+        plugin.onDetachedFromEngine(binding)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), eventsBeforeDetach)
+        assertEquals(eventsBeforeDetach, messenger.eventTypes)
+        assertTrue(messenger.handlers.isEmpty())
+    }
+
+    @Test
+    fun detachingPendingPromptCleansItsCoverAndQueuedOutcomeCannotCoverTheNextActivity() {
+        val firstController = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val firstActivity = firstController.get()
+        plugin.onAttachedToActivity(activityBinding(firstActivity))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        firstController.visible()
+        val firstDecor = firstActivity.window.decorView as ViewGroup
+        val firstChildren = firstDecor.children()
+
+        plugin.requestBiometricAuth("Authenticate")
+        assertEquals(firstChildren.size + 1, firstDecor.childCount)
+        ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
+        plugin.onDetachedFromActivity()
+        val nextActivity = focusedActivity().get()
+        val nextDecor = nextActivity.window.decorView as ViewGroup
+        val nextChildren = nextDecor.children()
+        plugin.onAttachedToActivity(activityBinding(nextActivity))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(firstChildren, firstDecor.children())
+        assertEquals(nextChildren, nextDecor.children())
+        assertEquals(
+            listOf("platformReady", "biometricUnavailable"),
+            messenger.eventTypes.filterNot { it.startsWith("appSwitcher") },
+        )
+        assertEquals(
+            listOf("appSwitcherProtected", "appSwitcherUnprotected"),
+            messenger.eventTypes.filter { it.startsWith("appSwitcher") },
+        )
         plugin.onDetachedFromEngine(binding)
     }
 
@@ -982,6 +1240,14 @@ class SecureContentPluginLifecycleTest {
         ReflectionHelpers.getField<BiometricAuthentication>(plugin, "biometricAuthentication"),
         "ownershipKey",
     )
+
+    private fun currentPromptCallback(): BiometricPrompt.AuthenticationCallback {
+        val session = ReflectionHelpers.getStaticField<Any>(
+            ShadowBiometricPrompt::class.java,
+            "currentAuthenticateSession",
+        )
+        return ReflectionHelpers.getField(session, "callback")
+    }
 
     private fun engineBinding(messenger: EventMessenger): FlutterPlugin.FlutterPluginBinding =
         FlutterPlugin.FlutterPluginBinding::class.java.constructors.single()
