@@ -65,7 +65,7 @@ Requires Flutter 3.44+, Dart 3.11+, Android API 23+, and iOS 13+.
 iOS builds require a Swift 6 compiler (Xcode 16 or newer).
 Android host apps must compile against SDK 37 or later. The example uses AGP 9.3.3.
 The example and CI use Flutter 3.47.4, which requires iOS 15+. See the
-[native toolchain](docs/native-toolchain.md) for compiler versions and compatibility.
+[native toolchain](doc/native-toolchain.md) for compiler versions and compatibility.
 AndroidX Core is constrained to 1.17.0 because newer releases remove the
 fingerprint implementation required by stable Biometric on Android 23–27.
 

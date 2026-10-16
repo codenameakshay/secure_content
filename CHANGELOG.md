@@ -1,10 +1,10 @@
 ## 3.0.0
 
-- Rewrite native coordination around dedicated authentication, clipboard, capture, and window owners with typed internal events and main-actor isolation on iOS. See the [native audit](docs/native-rewrite-audit.md).
+- Rewrite native coordination around dedicated authentication, clipboard, capture, and window owners with typed internal events and main-actor isolation on iOS. See the [native audit](doc/native-rewrite-audit.md).
 - Isolate biometric outcomes across engines, cancellation, and activity recreation. Reject Android prompts after fragment state is saved or when a legacy host theme is incompatible. Release detached clipboard observers without retaining the plugin.
 - Use scene capture traits on iOS 17+, report app-switcher configuration transitions, and restore privacy covers removed from their windows.
 - Correct the Swift language mode and enable complete concurrency checking. Preserve UIKit integration without adding SwiftUI.
-- Update the native toolchains and Pigeon bindings. Require Flutter 3.44+ and Android compile SDK 37, with Android API 23 and iOS 13 deployment minimums unchanged. See [version compatibility](docs/native-toolchain.md).
+- Update the native toolchains and Pigeon bindings. Require Flutter 3.44+ and Android compile SDK 37, with Android API 23 and iOS 13 deployment minimums unchanged. See [version compatibility](doc/native-toolchain.md).
 - Keep scoped content covered until native protection is ready. Ignore stale capture queries and biometric results across background transitions.
 - Require a fresh biometric result after resume or re-enable when a shared prompt was already in flight.
 - Block protected keyboard input and accessibility content while locked, hard-blocked, or captured. Count additional input when tracking inactivity.
@@ -15,7 +15,7 @@
 - Reconcile iOS covers across scenes, screens, configuration changes, and engine teardown. Keep privacy backgrounds opaque and add the example Face ID usage description.
 - Keep a cancelled or failed biometric prompt from opening again when the app regains focus. A new prompt opens only after the app returns from the background.
 - Clip the risk watermark to its `SecureContentScope` instead of painting over the rest of the screen.
-- Add adversarial Dart tests, Android Robolectric tests, and native iOS policy and simulator tests. See the [audit record](docs/reliability-audit.md) for individual fixes and verification limits.
+- Add adversarial Dart tests, Android Robolectric tests, and native iOS policy and simulator tests. See the [audit record](doc/reliability-audit.md) for individual fixes and verification limits.
 
 ## 2.1.0
 
