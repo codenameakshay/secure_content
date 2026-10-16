@@ -15,6 +15,7 @@ import io.flutter.plugin.common.BinaryMessenger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -23,6 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
@@ -325,30 +327,117 @@ class SecureContentPluginLifecycleTest {
         try {
             plugin.requestBiometricAuth("First engine")
             shadowOf(Looper.getMainLooper()).idle()
-            assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+            val firstPrompt = ShadowBiometricPrompt.getCurrentPrompt()
+            assertNotNull(firstPrompt)
             ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
 
             plugin.onDetachedFromActivity()
             secondPlugin.requestBiometricAuth("Second engine before callback drains")
             assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
-            assertEquals(listOf("biometricUnavailable"), secondMessenger.eventTypes)
+            assertEquals(listOf("biometricAuthFailed"), secondMessenger.eventTypes)
+            assertNull(ownershipKey(secondPlugin))
 
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
-            assertEquals(listOf("biometricUnavailable"), secondMessenger.eventTypes)
+            assertEquals(listOf("biometricAuthFailed"), secondMessenger.eventTypes)
 
             secondPlugin.requestBiometricAuth("Second engine after callback drains")
             shadowOf(Looper.getMainLooper()).idle()
-            assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+            val secondPrompt = ShadowBiometricPrompt.getCurrentPrompt()
+            assertNotNull(secondPrompt)
+            assertNotSame(firstPrompt, secondPrompt)
             ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
             shadowOf(Looper.getMainLooper()).idle()
 
             assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
-            assertEquals(listOf("biometricUnavailable", "biometricAuthSucceeded"), secondMessenger.eventTypes)
+            assertEquals(listOf("biometricAuthFailed", "biometricAuthSucceeded"), secondMessenger.eventTypes)
         } finally {
             plugin.onDetachedFromEngine(binding)
             secondPlugin.onDetachedFromEngine(secondBinding)
         }
+    }
+
+    @Test
+    fun canceledSelfLeaseReportsUnavailableWhenItsCurrentHostIsInvalid() {
+        val nullHostEvents = mutableListOf<NativeEvent>()
+        val nullHostActivity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val nullHostAuthentication = BiometricAuthentication(nullHostEvents::add)
+        nullHostAuthentication.request(nullHostActivity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        nullHostAuthentication.cancel(emitEvent = false)
+        val nullHostOwnership = ReflectionHelpers.getField<Any>(nullHostAuthentication, "ownershipKey")
+        nullHostAuthentication.request(null, "Retry without a host")
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), nullHostEvents)
+        assertSame(nullHostOwnership, ReflectionHelpers.getField(nullHostAuthentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(nullHostAuthentication, "cancellationPending"))
+
+        val finishingEvents = mutableListOf<NativeEvent>()
+        val finishingActivity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val finishingAuthentication = BiometricAuthentication(finishingEvents::add)
+        finishingAuthentication.request(finishingActivity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        finishingAuthentication.cancel(emitEvent = false)
+        val finishingOwnership = ReflectionHelpers.getField<Any>(finishingAuthentication, "ownershipKey")
+        finishingActivity.finish()
+        finishingAuthentication.request(finishingActivity, "Retry while finishing")
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), finishingEvents)
+        assertSame(finishingOwnership, ReflectionHelpers.getField(finishingAuthentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(finishingAuthentication, "cancellationPending"))
+
+        val destroyedEvents = mutableListOf<NativeEvent>()
+        val destroyedActivity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val destroyedAuthentication = BiometricAuthentication(destroyedEvents::add)
+        destroyedAuthentication.request(destroyedActivity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        destroyedAuthentication.cancel(emitEvent = false)
+        val destroyedOwnership = ReflectionHelpers.getField<Any>(destroyedAuthentication, "ownershipKey")
+        ReflectionHelpers.setField(destroyedActivity, "mDestroyed", true)
+        destroyedAuthentication.request(destroyedActivity, "Retry after destruction")
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), destroyedEvents)
+        assertSame(destroyedOwnership, ReflectionHelpers.getField(destroyedAuthentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(destroyedAuthentication, "cancellationPending"))
+    }
+
+    @Test
+    fun canceledSelfLeaseReportsUnavailableWhenFragmentStateIsSaved() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        val activity = controller.get()
+        val events = mutableListOf<NativeEvent>()
+        val authentication = BiometricAuthentication(events::add)
+        authentication.request(activity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        authentication.cancel(emitEvent = false)
+        val ownership = ReflectionHelpers.getField<Any>(authentication, "ownershipKey")
+        controller.pause().saveInstanceState(android.os.Bundle())
+
+        authentication.request(activity, "Retry after state was saved")
+
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), events)
+        assertSame(ownership, ReflectionHelpers.getField(authentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(authentication, "cancellationPending"))
+    }
+
+    @Test
+    @Config(sdk = [23])
+    fun canceledSelfLeaseReportsUnavailableWhenBiometricsBecomeUnavailable() {
+        val fingerprint = configureFingerprint()
+        val activity = Robolectric.buildActivity(FragmentActivity::class.java)
+            .also { it.get().setTheme(androidx.appcompat.R.style.Theme_AppCompat_DayNight_NoActionBar) }
+            .setup()
+            .get()
+        val events = mutableListOf<NativeEvent>()
+        val authentication = BiometricAuthentication(events::add)
+
+        authentication.request(activity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        authentication.cancel(emitEvent = false)
+        val ownership = ReflectionHelpers.getField<Any>(authentication, "ownershipKey")
+        fingerprint.setIsHardwareDetected(false)
+        authentication.request(activity, "Retry without biometrics")
+
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), events)
+        assertSame(ownership, ReflectionHelpers.getField(authentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(authentication, "cancellationPending"))
     }
 
     @Test
@@ -370,59 +459,110 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
     fun recreatedHostRetainsCanceledOwnershipUntilItsQueuedOutcomeDrains() {
         val firstController = Robolectric.buildActivity(FragmentActivity::class.java).setup()
-        val firstActivity = firstController.get()
-        val store = firstActivity.viewModelStore
-        plugin.onAttachedToActivity(activityBinding(firstActivity))
+        val store = firstController.get().viewModelStore
+        plugin.onAttachedToActivity(activityBinding(firstController.get()))
         val secondMessenger = EventMessenger()
         val secondBinding = engineBinding(secondMessenger)
         val secondPlugin = SecureContentPlugin().also { it.onAttachedToEngine(secondBinding) }
-        var recreatedController: org.robolectric.android.controller.ActivityController<FragmentActivity>? = null
+        var recreatedController: ActivityController<FragmentActivity>? = null
 
         try {
             plugin.requestBiometricAuth("First engine")
             shadowOf(Looper.getMainLooper()).idle()
-            assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+            val firstPrompt = ShadowBiometricPrompt.getCurrentPrompt()
+            assertNotNull(firstPrompt)
             ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
             plugin.onDetachedFromActivityForConfigChanges()
 
-            ReflectionHelpers.setField(firstActivity, "mChangingConfigurations", true)
-            val savedState = android.os.Bundle()
-            firstController.pause().stop().saveInstanceState(savedState)
-            val retained = firstActivity.onRetainNonConfigurationInstance()
-            firstController.destroy()
-
-            val newController = Robolectric.buildActivity(FragmentActivity::class.java)
-            recreatedController = newController
-            val newActivity = newController.get()
-            shadowOf(newActivity).setLastNonConfigurationInstance(retained)
-            newController.create(savedState).start().resume()
+            recreatedController = recreate(firstController)
+            val newActivity = recreatedController.get()
             assertSame(store, newActivity.viewModelStore)
             secondPlugin.onAttachedToActivity(activityBinding(newActivity))
             secondPlugin.requestBiometricAuth("Second engine before old outcome drains")
 
             assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
-            assertEquals(listOf("biometricUnavailable"), secondMessenger.eventTypes)
+            assertEquals(listOf("biometricAuthFailed"), secondMessenger.eventTypes)
+            assertNull(ownershipKey(secondPlugin))
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
-            assertEquals(listOf("biometricUnavailable"), secondMessenger.eventTypes)
+            assertEquals(listOf("biometricAuthFailed"), secondMessenger.eventTypes)
 
             secondPlugin.requestBiometricAuth("Second engine after old outcome drains")
             shadowOf(Looper.getMainLooper()).idle()
-            assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+            val secondPrompt = ShadowBiometricPrompt.getCurrentPrompt()
+            assertNotNull(secondPrompt)
+            assertNotSame(firstPrompt, secondPrompt)
             ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
             shadowOf(Looper.getMainLooper()).idle()
 
             assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
-            assertEquals(listOf("biometricUnavailable", "biometricAuthSucceeded"), secondMessenger.eventTypes)
+            assertEquals(listOf("biometricAuthFailed", "biometricAuthSucceeded"), secondMessenger.eventTypes)
         } finally {
             plugin.onDetachedFromEngine(binding)
             secondPlugin.onDetachedFromEngine(secondBinding)
             recreatedController?.pause()?.stop()?.destroy()
         }
     }
+
+    @Test
+    fun recreatedHostReportsTheSameEngineCancellationAsAFailedAttempt() {
+        val firstController = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        plugin.onAttachedToActivity(activityBinding(firstController.get()))
+        var recreatedController: ActivityController<FragmentActivity>? = null
+
+        try {
+            plugin.requestBiometricAuth("Before recreation")
+            shadowOf(Looper.getMainLooper()).idle()
+            val firstPrompt = ShadowBiometricPrompt.getCurrentPrompt()
+            assertNotNull(firstPrompt)
+            ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
+            plugin.onDetachedFromActivityForConfigChanges()
+
+            recreatedController = recreate(firstController)
+            plugin.onReattachedToActivityForConfigChanges(activityBinding(recreatedController.get()))
+            plugin.requestBiometricAuth("Before the old outcome drains")
+            assertEquals(listOf("biometricUnavailable", "biometricAuthFailed"), messenger.eventTypes)
+
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(listOf("biometricUnavailable", "biometricAuthFailed"), messenger.eventTypes)
+            plugin.requestBiometricAuth("After the old outcome drains")
+            shadowOf(Looper.getMainLooper()).idle()
+            val secondPrompt = ShadowBiometricPrompt.getCurrentPrompt()
+            assertNotNull(secondPrompt)
+            assertNotSame(firstPrompt, secondPrompt)
+            ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
+            shadowOf(Looper.getMainLooper()).idle()
+
+            assertEquals(
+                listOf("biometricUnavailable", "biometricAuthFailed", "biometricAuthSucceeded"),
+                messenger.eventTypes,
+            )
+        } finally {
+            plugin.onDetachedFromEngine(binding)
+            recreatedController?.pause()?.stop()?.destroy()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun recreate(controller: ActivityController<FragmentActivity>): ActivityController<FragmentActivity> {
+        val activity = controller.get()
+        ReflectionHelpers.setField(activity, "mChangingConfigurations", true)
+        val savedState = android.os.Bundle()
+        controller.pause().stop().saveInstanceState(savedState)
+        val retained = activity.onRetainNonConfigurationInstance()
+        controller.destroy()
+
+        val newController = Robolectric.buildActivity(FragmentActivity::class.java)
+        shadowOf(newController.get()).setLastNonConfigurationInstance(retained)
+        return newController.create(savedState).start().resume()
+    }
+
+    private fun ownershipKey(plugin: SecureContentPlugin): Any? = ReflectionHelpers.getField(
+        ReflectionHelpers.getField<BiometricAuthentication>(plugin, "biometricAuthentication"),
+        "ownershipKey",
+    )
 
     private fun engineBinding(messenger: EventMessenger): FlutterPlugin.FlutterPluginBinding =
         FlutterPlugin.FlutterPluginBinding::class.java.constructors.single()

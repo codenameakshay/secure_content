@@ -1,3 +1,9 @@
+## Unreleased
+
+- Emit `idleLockActivated` and `idleLockReleased` once for each lock change. Resuming after the idle deadline, or reaching it while already locked, no longer repeats `idleLockActivated`. A scope that starts locked now emits `idleLockActivated`, and disabling a locked scope emits `idleLockReleased`.
+- Keep the normal lock screen when an Android activity is recreated during a biometric prompt, instead of reporting that biometrics are unavailable. A draining cancellation returns `biometricAuthFailed` only if the current host and authenticators are usable. Unavailable hosts or authenticators still return `biometricUnavailable`.
+- Ignore stale custom unlock callbacks after scope disposal, preventing phantom idle-lock releases and new biometric prompts.
+
 ## 3.0.0
 
 - Rewrite native coordination around dedicated authentication, clipboard, capture, and window owners with typed internal events and main-actor isolation on iOS. See the [native audit](doc/native-rewrite-audit.md).

@@ -145,6 +145,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
       // content is never rendered even for a single frame (AUTH-02).
       _isLocked = true;
       _isBiometricLocked = true;
+      _service.emitLocalEvent(SecureContentEventType.idleLockActivated);
       if (_appLifecycleState == AppLifecycleState.resumed) {
         _isAuthenticating = true;
         final generation = ++_biometricRequestGeneration;
@@ -185,8 +186,8 @@ class _SecureContentScopeState extends State<SecureContentScope>
       _captureStateRequestGeneration += 1;
       _captureStatePrimed = true;
       _nativeProtectionReady = true;
+      _setLocked(false);
       _updateState(() {
-        _isLocked = false;
         _integrityRiskDetected = false;
         _biometricUnavailable = false;
       });
@@ -223,7 +224,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
         (!oldWidget.enabled || !oldWidget.policy.requireBiometricOnResume);
     if (biometricJustRequired) {
       _needsBiometricAuth = true;
-      _isLocked = true;
+      _activateIdleLock();
       _isBiometricLocked = true;
       if (_appLifecycleState == AppLifecycleState.resumed) {
         _lockAndRequestBiometric();
@@ -522,19 +523,27 @@ class _SecureContentScopeState extends State<SecureContentScope>
     if (!widget.enabled) {
       return;
     }
-    _updateState(() {
-      _isLocked = true;
-    });
-    _service.emitLocalEvent(SecureContentEventType.idleLockActivated);
+    _setLocked(true);
   }
 
   void _unlock() {
-    _updateState(() {
-      _isLocked = false;
-      _isBiometricLocked = false;
-    });
-    _service.emitLocalEvent(SecureContentEventType.idleLockReleased);
+    _isBiometricLocked = false;
+    _setLocked(false);
     _restartIdleTimer();
+  }
+
+  void _setLocked(bool locked) {
+    if (_isLocked == locked) {
+      return;
+    }
+    _updateState(() {
+      _isLocked = locked;
+    });
+    _service.emitLocalEvent(
+      locked
+          ? SecureContentEventType.idleLockActivated
+          : SecureContentEventType.idleLockReleased,
+    );
   }
 
   void _snapshotPendingBiometricRequest() {
@@ -779,6 +788,9 @@ class _SecureContentScopeState extends State<SecureContentScope>
   }
 
   void _handleUnlock() {
+    if (!mounted || !widget.enabled) {
+      return;
+    }
     if (widget.policy.requireBiometricOnResume) {
       _lockAndRequestBiometric();
     } else {
