@@ -246,6 +246,142 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
+    @Config(sdk = [23, 28, 30, 36])
+    fun anInitiallyUnfocusedWindowIsCoveredWhenItsPreinstalledDecorAttaches() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        assertFalse(decor.isAttachedToWindow)
+        assertFalse(decor.hasWindowFocus())
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+
+        controller.visible()
+
+        assertTrue(decor.isAttachedToWindow)
+        assertFalse(decor.hasWindowFocus())
+        val cover = decor.children().single { it !in hostChildren }
+        assertSame(cover, decor.getChildAt(decor.childCount - 1))
+        assertEquals(0xff123456.toInt(), (cover.background as ColorDrawable).color)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun aNativeDecorChildAddedWhileUnfocusedStaysBelowTheCover() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        controller.windowFocusChanged(false)
+        val cover = decor.children().single { it !in hostChildren }
+        val nativeContent = View(controller.get()).apply { setBackgroundColor(0xffff0000.toInt()) }
+
+        decor.addView(nativeContent, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        decor.layout(0, 0, decor.width + 1, decor.height + 1)
+        decor.viewTreeObserver.dispatchOnPreDraw()
+
+        assertSame(cover, decor.getChildAt(decor.childCount - 1))
+        assertSame(nativeContent, decor.getChildAt(decor.childCount - 2))
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        controller.windowFocusChanged(true)
+        assertEquals(hostChildren + nativeContent, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun detachingBeforeDeferredObservationDoesNotObserveTheOldWindow() {
+        AttachDuringCreateActivity.onCreateHook = {
+            plugin.onAttachedToActivity(activityBinding(it))
+            assertNull(it.window.peekDecorView())
+            plugin.onDetachedFromActivity()
+        }
+        val controller = try {
+            Robolectric.buildActivity(AttachDuringCreateActivity::class.java).create().start().resume().visible()
+        } finally {
+            AttachDuringCreateActivity.onCreateHook = null
+        }
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+
+        shadowOf(Looper.getMainLooper()).idle()
+        controller.windowFocusChanged(true).windowFocusChanged(false)
+
+        assertEquals(hostChildren, decor.children())
+        assertFalse(isSecure(controller.get()))
+        assertEquals(listOf("platformReady"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun reattachingADifferentActivityBeforeDeferredObservationIgnoresTheOldWindow() {
+        AttachDuringCreateActivity.onCreateHook = {
+            plugin.onAttachedToActivity(activityBinding(it))
+            assertNull(it.window.peekDecorView())
+            plugin.onDetachedFromActivityForConfigChanges()
+        }
+        val oldController = try {
+            Robolectric.buildActivity(AttachDuringCreateActivity::class.java).create().start().resume().visible()
+        } finally {
+            AttachDuringCreateActivity.onCreateHook = null
+        }
+        val oldDecor = oldController.get().window.decorView as ViewGroup
+        val oldChildren = oldDecor.children()
+        val newController = focusedActivity()
+        val newDecor = newController.get().window.decorView as ViewGroup
+        val newChildren = newDecor.children()
+        plugin.onReattachedToActivityForConfigChanges(activityBinding(newController.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+
+        shadowOf(Looper.getMainLooper()).idle()
+        oldController.windowFocusChanged(true).windowFocusChanged(false)
+
+        assertEquals(oldChildren, oldDecor.children())
+        assertEquals(newChildren, newDecor.children())
+        assertFalse(isSecure(oldController.get()))
+        newController.windowFocusChanged(false)
+        assertEquals(newChildren.size + 1, newDecor.childCount)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun reattachingTheSameActivityBeforeDeferredObservationRegistersOneFocusListener() {
+        AttachDuringCreateActivity.onCreateHook = {
+            plugin.onAttachedToActivity(activityBinding(it))
+            plugin.onDetachedFromActivityForConfigChanges()
+            plugin.onReattachedToActivityForConfigChanges(activityBinding(it))
+            assertNull(it.window.peekDecorView())
+        }
+        val controller = try {
+            Robolectric.buildActivity(AttachDuringCreateActivity::class.java).create().start().resume().visible()
+        } finally {
+            AttachDuringCreateActivity.onCreateHook = null
+        }
+        shadowOf(Looper.getMainLooper()).idle()
+        val decor = controller.get().window.decorView as ViewGroup
+        val listener = ReflectionHelpers.getField<Any>(plugin, "focusListener")
+        val listeners = ReflectionHelpers.getField<List<Any>>(decor.viewTreeObserver, "mOnWindowFocusListeners")
+        assertEquals(1, listeners.count { it === listener })
+        controller.windowFocusChanged(true)
+        val hostChildren = decor.children()
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+
+        controller.windowFocusChanged(false)
+        repeat(3) { decor.layout(0, 0, decor.width + 1, decor.height + 1) }
+
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        controller.windowFocusChanged(true)
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
     fun duplicateBiometricRequestsShareOnePromptAndOneOutcome() {
         plugin.onAttachedToActivity(activityBinding(activity()))
         plugin.requestBiometricAuth("First request")
