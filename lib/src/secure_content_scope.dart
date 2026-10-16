@@ -100,6 +100,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
   bool _isBiometricLocked = false;
   bool _needsBiometricAuth = false;
   bool _biometricRequestCrossedBackground = false;
+  Future<SecureContentEventType>? _biometricRequestToDrain;
   bool _biometricUnavailable = false;
   int _biometricRequestGeneration = 0;
   bool _integrityRiskDetected = false;
@@ -131,6 +132,13 @@ class _SecureContentScopeState extends State<SecureContentScope>
 
     _needsBiometricAuth =
         widget.policy.requireBiometricOnResume && widget.enabled;
+    final pendingBiometricRequest = _service.pendingBiometricRequest;
+    if (_needsBiometricAuth &&
+        (_appLifecycleState == AppLifecycleState.paused ||
+            _appLifecycleState == AppLifecycleState.hidden ||
+            _appLifecycleState == AppLifecycleState.detached)) {
+      _biometricRequestToDrain = pendingBiometricRequest;
+    }
     if (_needsBiometricAuth) {
       // Set the initial lock synchronously, before the first build and
       // before any async integrity/biometric work starts, so protected
@@ -169,6 +177,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
     if (enabledChanged && !widget.enabled) {
       // STATE-01: disabling protection must hard-block every side effect
       // right away, not just stop new ones from starting.
+      _snapshotPendingBiometricRequest();
       _biometricRequestGeneration += 1;
       _isAuthenticating = false;
       _isBiometricLocked = false;
@@ -199,6 +208,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
       // A policy that no longer requires biometrics must not leave a stale
       // pending request behind. Incrementing the generation makes any late
       // result from that request inert.
+      _snapshotPendingBiometricRequest();
       _biometricRequestGeneration += 1;
       _needsBiometricAuth = false;
       _isAuthenticating = false;
@@ -279,6 +289,7 @@ class _SecureContentScopeState extends State<SecureContentScope>
       if (_isAuthenticating) {
         _biometricRequestCrossedBackground = true;
       }
+      _snapshotPendingBiometricRequest();
     }
 
     if (widget.policy.requireBiometricOnResume &&
@@ -526,6 +537,13 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _restartIdleTimer();
   }
 
+  void _snapshotPendingBiometricRequest() {
+    final pendingRequest = _service.pendingBiometricRequest;
+    if (pendingRequest != null) {
+      _biometricRequestToDrain = pendingRequest;
+    }
+  }
+
   void _lockAndRequestBiometric() {
     if (_isAuthenticating || !widget.enabled) {
       return;
@@ -535,7 +553,55 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _isBiometricLocked = true;
     final generation = ++_biometricRequestGeneration;
     _activateIdleLock();
-    unawaited(_awaitBiometricResult(widget.policy.biometricReason, generation));
+    final pendingRequest = _biometricRequestToDrain;
+    if (pendingRequest == null) {
+      unawaited(
+        _awaitBiometricResult(widget.policy.biometricReason, generation),
+      );
+    } else {
+      unawaited(
+        _requestBiometricAfterDrain(
+          widget.policy.biometricReason,
+          generation,
+          pendingRequest,
+        ),
+      );
+    }
+  }
+
+  Future<void> _requestBiometricAfterDrain(
+    String reason,
+    int generation,
+    Future<SecureContentEventType> pendingRequest,
+  ) async {
+    var requestToDrain = pendingRequest;
+    while (true) {
+      await requestToDrain;
+      if (!mounted || generation != _biometricRequestGeneration) {
+        return;
+      }
+      if (!widget.enabled || !widget.policy.requireBiometricOnResume) {
+        _isAuthenticating = false;
+        return;
+      }
+      if (_appLifecycleState != AppLifecycleState.resumed) {
+        _isAuthenticating = false;
+        _needsBiometricAuth = true;
+        return;
+      }
+
+      final newerRequest = _biometricRequestToDrain;
+      if (newerRequest != null && !identical(newerRequest, requestToDrain)) {
+        requestToDrain = newerRequest;
+        continue;
+      }
+      if (identical(_biometricRequestToDrain, requestToDrain)) {
+        _biometricRequestToDrain = null;
+      }
+      _biometricRequestCrossedBackground = false;
+      unawaited(_awaitBiometricResult(reason, generation));
+      return;
+    }
   }
 
   /// Awaits the outcome of this scope's own biometric request and updates
@@ -580,7 +646,6 @@ class _SecureContentScopeState extends State<SecureContentScope>
         _appLifecycleState == AppLifecycleState.hidden ||
         _appLifecycleState == AppLifecycleState.detached;
     // The prompt itself moves the app through inactive and back to resumed.
-    // Only a background transition may request another prompt.
     _needsBiometricAuth = backgrounded;
     switch (outcome) {
       case SecureContentEventType.biometricAuthSucceeded:

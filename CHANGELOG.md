@@ -6,6 +6,7 @@
 - Correct the Swift language mode and enable complete concurrency checking. Preserve UIKit integration without adding SwiftUI.
 - Update the native toolchains and Pigeon bindings. Require Flutter 3.44+ and Android compile SDK 37, with Android API 23 and iOS 13 deployment minimums unchanged. See [version compatibility](docs/native-toolchain.md).
 - Keep scoped content covered until native protection is ready. Ignore stale capture queries and biometric results across background transitions.
+- Require a fresh biometric result after resume or re-enable when a shared prompt was already in flight.
 - Block protected keyboard input and accessibility content while locked, hard-blocked, or captured. Count additional input when tracking inactivity.
 - Preserve biometric request ownership, deterministic source priority, unsupported-platform fallbacks, and safe parsing of malformed timestamps.
 - Fix Android biometric prompt construction on API 23–29. Use `FlutterFragmentActivity` in the example for older Android authentication.
