@@ -3,6 +3,10 @@ package com.codenameakshay.secure_content
 import android.app.Activity
 import android.graphics.Color
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import androidx.annotation.MainThread
 import com.codenameakshay.secure_content.pigeon.ProtectionConfig
@@ -26,6 +30,18 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var appSwitcherProtectionEnabled = false
     private var appSwitcherColor = Color.BLACK
     private var platformReadyEmitted = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var observedDecor: View? = null
+    private var windowFocused = true
+    private var inMultiWindow = false
+    private var coverReported = false
+    private val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+        windowFocused = hasFocus
+        applyProtection()
+    }
+    private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        if (activity?.let(::isInMultiWindow) != inMultiWindow) applyProtection()
+    }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         flutterApi = SecureContentFlutterApi(binding.binaryMessenger)
@@ -79,6 +95,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         biometricAuthentication.onActivityAttached(binding.activity)
+        observeWindow(binding.activity)
         applyProtection()
         registerScreenshotCallback()
         clipboard?.onActivityAttached(binding.activity)
@@ -95,21 +112,60 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private fun detachActivity() {
         biometricAuthentication.cancel()
         unregisterScreenshotCallback()
+        observedDecor?.let {
+            it.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener)
+            it.removeOnLayoutChangeListener(layoutListener)
+        }
+        observedDecor = null
+        windowFocused = true
         activity?.let {
             clipboard?.onActivityDetached(it)
             windowProtectionState.restore(it.window)
         }
         activity = null
+        reportAppSwitcherCover(false)
+    }
+
+    private fun observeWindow(activity: Activity, decor: View? = activity.window.peekDecorView()) {
+        if (observedDecor != null) return
+        if (decor == null) {
+            // FlutterActivity attaches plugins before setContentView; installing the decor early
+            // would freeze its window features.
+            mainHandler.post {
+                if (this.activity !== activity) return@post
+                observeWindow(activity, activity.window.decorView)
+                applyProtection()
+            }
+            return
+        }
+        observedDecor = decor
+        windowFocused = !decor.isAttachedToWindow || decor.hasWindowFocus()
+        decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
+        decor.addOnLayoutChangeListener(layoutListener)
     }
 
     private fun applyProtection() {
-        val window = activity?.window ?: return
+        val activity = activity ?: return
+        // Split screen and other multi-window modes leave the app visible without focus.
+        inMultiWindow = isInMultiWindow(activity)
+        val inactive = !windowFocused && !inMultiWindow
         windowProtectionState.apply(
-            window,
+            activity.window,
             secureEnabled = secureEnabled,
             appSwitcherProtected = appSwitcherProtectionEnabled,
             appSwitcherColor = appSwitcherColor,
+            windowInactive = inactive,
         )
+        reportAppSwitcherCover(secureEnabled && appSwitcherProtectionEnabled && inactive)
+    }
+
+    private fun isInMultiWindow(activity: Activity): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInMultiWindowMode
+
+    private fun reportAppSwitcherCover(covered: Boolean) {
+        if (covered == coverReported) return
+        coverReported = covered
+        emitEvent(if (covered) NativeEvent.APP_SWITCHER_PROTECTED else NativeEvent.APP_SWITCHER_UNPROTECTED)
     }
 
     private fun registerScreenshotCallback() {

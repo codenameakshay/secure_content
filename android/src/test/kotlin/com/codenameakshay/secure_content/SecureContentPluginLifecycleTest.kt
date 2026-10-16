@@ -3,8 +3,11 @@ package com.codenameakshay.secure_content
 import android.app.Activity
 import android.app.Application
 import android.content.pm.PackageManager
+import android.graphics.drawable.ColorDrawable
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Looper
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import com.codenameakshay.secure_content.pigeon.ProtectionConfig
 import com.codenameakshay.secure_content.pigeon.SecureContentFlutterApi
@@ -81,6 +84,165 @@ class SecureContentPluginLifecycleTest {
 
         plugin.onDetachedFromEngine(binding)
         assertFalse(isSecure(newActivity))
+    }
+
+    @Test
+    @Config(sdk = [23, 30, 36])
+    fun focusLossCoversTheWholeWindowOpaquelyUntilFocusReturns() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0x80123456))
+
+        controller.windowFocusChanged(false)
+
+        val cover = decor.children().single { it !in hostChildren }
+        assertSame(cover, decor.getChildAt(decor.childCount - 1))
+        assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, cover.layoutParams.width)
+        assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, cover.layoutParams.height)
+        assertEquals(0xff123456.toInt(), (cover.background as ColorDrawable).color)
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, cover.importantForAccessibility)
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, decor.importantForAccessibility)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+
+        controller.windowFocusChanged(true)
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(hostAccessibility, decor.importantForAccessibility)
+        assertTrue(isSecure(controller.get()))
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun focusLossLeavesTheWindowUncoveredWithoutAppSwitcherProtection() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+
+        for (config in listOf(ProtectionConfig(true, false, 0xff000000), ProtectionConfig(false, true, 0xff000000))) {
+            plugin.configureProtection(config)
+            controller.windowFocusChanged(false)
+            assertEquals(hostChildren, decor.children())
+            controller.windowFocusChanged(true)
+        }
+
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+        controller.windowFocusChanged(false)
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        plugin.configureProtection(ProtectionConfig(false, true, 0xff000000))
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun multiWindowFocusLossLeavesTheVisibleAppUncovered() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+
+        shadowOf(controller.get()).setInMultiWindowMode(true)
+        controller.windowFocusChanged(false)
+        assertEquals(hostChildren, decor.children())
+
+        shadowOf(controller.get()).setInMultiWindowMode(false)
+        decor.layout(0, 0, decor.width + 1, decor.height)
+        assertEquals(hostChildren.size + 1, decor.childCount)
+
+        shadowOf(controller.get()).setInMultiWindowMode(true)
+        decor.layout(0, 0, decor.width - 1, decor.height)
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun configurationChangeRemovesTheOldCoverAndWaitsForTheNewWindowToLoseFocus() {
+        val oldController = focusedActivity()
+        val oldDecor = oldController.get().window.decorView as ViewGroup
+        val oldChildren = oldDecor.children()
+        val oldAccessibility = oldDecor.importantForAccessibility
+        plugin.onAttachedToActivity(activityBinding(oldController.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+        oldController.windowFocusChanged(false)
+
+        plugin.onDetachedFromActivityForConfigChanges()
+        assertEquals(oldChildren, oldDecor.children())
+        assertEquals(oldAccessibility, oldDecor.importantForAccessibility)
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        val newController = focusedActivity()
+        val newDecor = newController.get().window.decorView as ViewGroup
+        val newChildren = newDecor.children()
+        plugin.onReattachedToActivityForConfigChanges(activityBinding(newController.get()))
+        assertEquals(newChildren, newDecor.children())
+        oldController.windowFocusChanged(true)
+        oldController.windowFocusChanged(false)
+        assertEquals(oldChildren, oldDecor.children())
+        assertEquals(newChildren, newDecor.children())
+
+        newController.windowFocusChanged(false)
+
+        assertEquals(newChildren.size + 1, newDecor.childCount)
+        assertEquals(
+            listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "appSwitcherProtected"),
+            messenger.eventTypes,
+        )
+        plugin.onDetachedFromEngine(binding)
+        assertEquals(newChildren, newDecor.children())
+    }
+
+    @Test
+    fun engineDetachRemovesTheCoverAndStopsObservingTheWindow() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+        controller.windowFocusChanged(false)
+
+        plugin.onDetachedFromEngine(binding)
+        assertEquals(hostChildren, decor.children())
+        assertEquals(hostAccessibility, decor.importantForAccessibility)
+        controller.windowFocusChanged(true)
+        controller.windowFocusChanged(false)
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+    }
+
+    @Test
+    fun activityAttachedBeforeItsContentViewIsObservedWithoutInstallingTheDecorEarly() {
+        var decorAfterAttach: View? = null
+        AttachDuringCreateActivity.onCreateHook = {
+            plugin.onAttachedToActivity(activityBinding(it))
+            decorAfterAttach = it.window.peekDecorView()
+        }
+        val controller = try {
+            Robolectric.buildActivity(AttachDuringCreateActivity::class.java).create()
+        } finally {
+            AttachDuringCreateActivity.onCreateHook = null
+        }
+        assertNull(decorAfterAttach)
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+
+        controller.start().resume().visible()
+        shadowOf(Looper.getMainLooper()).idle()
+        val decor = controller.get().window.decorView as ViewGroup
+        controller.windowFocusChanged(true)
+        val hostChildren = decor.children()
+        controller.windowFocusChanged(false)
+
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
     }
 
     @Test
@@ -578,6 +740,10 @@ class SecureContentPluginLifecycleTest {
 
     private fun activity(): Activity = Robolectric.buildActivity(Activity::class.java).setup().get()
 
+    private fun focusedActivity() = Robolectric.buildActivity(Activity::class.java).setup().windowFocusChanged(true)
+
+    private fun ViewGroup.children(): List<View> = (0 until childCount).map(::getChildAt)
+
     private fun isSecure(activity: Activity): Boolean =
         activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
 
@@ -588,6 +754,18 @@ class SecureContentPluginLifecycleTest {
         check(method.name == "getActivity")
         activity
     } as ActivityPluginBinding
+
+    class AttachDuringCreateActivity : Activity() {
+        override fun onCreate(savedInstanceState: android.os.Bundle?) {
+            super.onCreate(savedInstanceState)
+            onCreateHook?.invoke(this)
+            setContentView(View(this))
+        }
+
+        companion object {
+            var onCreateHook: ((Activity) -> Unit)? = null
+        }
+    }
 
     class UnavailableExecutorActivity : Activity() {
         var executorUnavailable = false

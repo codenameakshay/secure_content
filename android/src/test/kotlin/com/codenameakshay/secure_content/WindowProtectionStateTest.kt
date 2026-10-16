@@ -1,9 +1,13 @@
 package com.codenameakshay.secure_content
 
 import android.app.Activity
+import android.graphics.drawable.ColorDrawable
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -180,4 +184,61 @@ class WindowProtectionStateTest {
             )
         }
     }
+
+    @Test
+    fun enginesSharingAWindowShareOneCoverAndRestoreTheHostAccessibilityMode() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val decor = activity.window.decorView as ViewGroup
+        decor.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        val hostChildren = decor.children()
+        val first = WindowProtectionState()
+        val second = WindowProtectionState()
+
+        first.apply(activity.window, true, true, 0xff000001.toInt(), windowInactive = true)
+        second.apply(activity.window, true, true, 0xff000002.toInt(), windowInactive = true)
+        val cover = decor.children().single { it !in hostChildren }
+        assertEquals(0xff000002.toInt(), (cover.background as ColorDrawable).color)
+
+        second.apply(activity.window, true, true, 0xff000002.toInt(), windowInactive = false)
+        assertSame(cover, decor.children().single { it !in hostChildren })
+        assertEquals(0xff000001.toInt(), (cover.background as ColorDrawable).color)
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, decor.importantForAccessibility)
+
+        first.restore(activity.window)
+        assertEquals(hostChildren, decor.children())
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_YES, decor.importantForAccessibility)
+        assertTrue((activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0)
+        second.restore(activity.window)
+        assertFalse((activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0)
+    }
+
+    @Test
+    fun reapplyingKeepsTheCoverAboveViewsTheHostAddsLater() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val decor = activity.window.decorView as ViewGroup
+        val state = WindowProtectionState()
+        state.apply(activity.window, true, true, 0xff000000.toInt(), windowInactive = true)
+        val cover = decor.getChildAt(decor.childCount - 1)
+
+        decor.addView(View(activity))
+        state.apply(activity.window, true, true, 0xff000000.toInt(), windowInactive = true)
+
+        assertSame(cover, decor.getChildAt(decor.childCount - 1))
+        state.restore(activity.window)
+    }
+
+    @Test
+    fun inactiveWindowWithoutSwitcherProtectionIsNotCovered() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+
+        WindowProtectionState().apply(activity.window, true, false, 0xff000000.toInt(), windowInactive = true)
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(hostAccessibility, decor.importantForAccessibility)
+    }
+
+    private fun ViewGroup.children(): List<View> = (0 until childCount).map(::getChildAt)
 }
