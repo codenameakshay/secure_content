@@ -1,0 +1,124 @@
+20:28:03.184 SC_DIAG : native request owner=false pending=false
+20:28:03.383 SC_EVENT integrityRiskDetected
+20:28:03.555 SC_EVENT platformReady
+20:28:15.235 SC_EVENT biometricAuthSucceeded
+20:28:15.254 SC_DIAG result SecureContentEventType.biometricAuthSucceeded gen=1 cur=1 crossed=false state=AppLifecycleState.resumed
+20:28:15.418 SC_EVENT idleLockReleased
+20:28:25.319 SC_DIAG lifecycle AppLifecycleState.inactive needs=false auth=false locked=false
+20:28:26.504 SC_DIAG lifecycle AppLifecycleState.hidden needs=false auth=false locked=false
+20:28:26.504 SC_DIAG lifecycle AppLifecycleState.paused needs=true auth=false locked=false
+20:28:39.065 SC_DIAG lifecycle AppLifecycleState.hidden needs=true auth=false locked=false
+20:28:39.069 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=false locked=false
+20:28:45.101 SC_DIAG lifecycle AppLifecycleState.resumed needs=true auth=false locked=false
+20:28:45.326 SC_DIAG lockAndRequest auth=false enabled=true
+20:28:45.816 SC_EVENT idleLockActivated
+20:28:45.829 SC_EVENT idleLockActivated
+20:28:45.884 SC_DIAG : native request owner=false pending=false
+20:28:46.421 SC_EVENT integrityRiskDetected
+20:28:47.649 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=true locked=true
+20:29:06.188 SC_EVENT biometricAuthSucceeded
+20:29:06.195 SC_DIAG result SecureContentEventType.biometricAuthSucceeded gen=2 cur=2 crossed=false state=AppLifecycleState.inactive
+20:29:06.201 SC_EVENT idleLockReleased
+20:29:06.660 SC_DIAG lifecycle AppLifecycleState.resumed needs=false auth=false locked=false
+20:29:06.700 SC_EVENT integrityRiskDetected
+20:29:22.114 SC_DIAG lockAndRequest auth=false enabled=true
+20:29:22.155 SC_EVENT idleLockActivated
+20:29:22.157 SC_DIAG : native request owner=false pending=false
+20:29:22.182 SC_EVENT integrityRiskDetected
+20:29:22.276 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=true locked=true
+20:29:29.450 SC_EVENT biometricAuthSucceeded
+20:29:29.454 SC_DIAG result SecureContentEventType.biometricAuthSucceeded gen=4 cur=4 crossed=false state=AppLifecycleState.inactive
+20:29:29.457 SC_EVENT idleLockReleased
+20:29:29.598 SC_DIAG lifecycle AppLifecycleState.resumed needs=false auth=false locked=false
+20:29:29.612 SC_EVENT integrityRiskDetected
+20:29:40.806 SC_DIAG lifecycle AppLifecycleState.inactive needs=false auth=false locked=false
+20:29:42.236 SC_DIAG lifecycle AppLifecycleState.hidden needs=false auth=false locked=false
+20:29:42.237 SC_DIAG lifecycle AppLifecycleState.paused needs=true auth=false locked=false
+20:29:53.044 SC_DIAG lifecycle AppLifecycleState.hidden needs=true auth=false locked=false
+20:29:53.047 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=false locked=false
+20:29:53.823 SC_DIAG lifecycle AppLifecycleState.resumed needs=true auth=false locked=false
+20:29:53.824 SC_DIAG lockAndRequest auth=false enabled=true
+20:29:53.862 SC_EVENT idleLockActivated
+20:29:53.863 SC_EVENT idleLockActivated
+20:29:53.866 SC_DIAG : native request owner=false pending=false
+20:29:53.905 SC_EVENT integrityRiskDetected
+20:29:54.081 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=true locked=true
+20:30:51.979 SC_EVENT biometricAuthSucceeded
+20:30:51.990 SC_DIAG result SecureContentEventType.biometricAuthSucceeded gen=5 cur=5 crossed=false state=AppLifecycleState.inactive
+20:30:52.000 SC_EVENT idleLockReleased
+20:30:52.415 SC_DIAG lifecycle AppLifecycleState.resumed needs=false auth=false locked=false
+20:30:52.431 SC_EVENT integrityRiskDetected
+20:30:56.103 SC_DIAG lifecycle AppLifecycleState.inactive needs=false auth=false locked=false
+20:30:57.377 SC_DIAG lifecycle AppLifecycleState.hidden needs=false auth=false locked=false
+20:30:57.380 SC_DIAG lifecycle AppLifecycleState.paused needs=true auth=false locked=false
+20:30:58.094 SC_DIAG lifecycle AppLifecycleState.hidden needs=true auth=false locked=false
+20:30:58.095 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=false locked=false
+20:30:58.521 SC_DIAG lifecycle AppLifecycleState.resumed needs=true auth=false locked=false
+20:30:58.523 SC_DIAG lockAndRequest auth=false enabled=true
+20:30:58.529 SC_EVENT idleLockActivated
+20:30:58.530 SC_DIAG : native request owner=false pending=false
+20:30:58.569 SC_EVENT integrityRiskDetected
+20:30:58.740 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=true locked=true
+20:31:12.004 SC_EVENT idleLockActivated
+20:31:32.954 SC_EVENT biometricAuthSucceeded
+20:31:32.959 SC_DIAG result SecureContentEventType.biometricAuthSucceeded gen=6 cur=6 crossed=false state=AppLifecycleState.inactive
+20:31:32.972 SC_EVENT idleLockReleased
+20:31:33.422 SC_DIAG lifecycle AppLifecycleState.resumed needs=false auth=false locked=false
+20:31:33.454 SC_EVENT integrityRiskDetected
+20:31:52.990 SC_EVENT idleLockActivated
+20:31:57.192 SC_DIAG lifecycle AppLifecycleState.inactive needs=false auth=false locked=true
+20:31:58.403 SC_DIAG lifecycle AppLifecycleState.hidden needs=false auth=false locked=true
+20:31:58.405 SC_DIAG lifecycle AppLifecycleState.paused needs=true auth=false locked=true
+20:32:09.322 SC_DIAG lifecycle AppLifecycleState.hidden needs=true auth=false locked=true
+20:32:09.323 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=false locked=true
+20:32:09.664 SC_DIAG lifecycle AppLifecycleState.resumed needs=true auth=false locked=true
+20:32:09.665 SC_DIAG lockAndRequest auth=false enabled=true
+20:32:09.681 SC_EVENT idleLockActivated
+20:32:09.682 SC_EVENT idleLockActivated
+20:32:09.683 SC_DIAG : native request owner=false pending=false
+20:32:09.728 SC_EVENT integrityRiskDetected
+20:32:09.836 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=true locked=true
+20:33:21.963 SC_EVENT biometricAuthFailed
+20:33:21.980 SC_DIAG result SecureContentEventType.biometricAuthFailed gen=7 cur=7 crossed=false state=AppLifecycleState.inactive
+20:33:22.213 SC_DIAG lifecycle AppLifecycleState.resumed needs=false auth=false locked=true
+20:33:22.220 SC_EVENT idleLockActivated
+20:33:22.226 SC_EVENT integrityRiskDetected
+20:33:49.012 SC_DIAG lockAndRequest auth=false enabled=true
+20:33:49.015 SC_EVENT idleLockActivated
+20:33:49.076 SC_DIAG : native request owner=false pending=false
+20:33:49.556 SC_DIAG lifecycle AppLifecycleState.inactive needs=false auth=true locked=true
+20:34:09.174 SC_EVENT idleLockActivated
+20:34:10.364 SC_EVENT biometricAuthSucceeded
+20:34:10.365 SC_DIAG result SecureContentEventType.biometricAuthSucceeded gen=8 cur=8 crossed=false state=AppLifecycleState.inactive
+20:34:10.365 SC_EVENT idleLockReleased
+20:34:10.479 SC_DIAG lifecycle AppLifecycleState.resumed needs=false auth=false locked=false
+20:34:10.505 SC_EVENT integrityRiskDetected
+20:34:30.383 SC_EVENT idleLockActivated
+20:34:49.940 SC_DIAG lockAndRequest auth=false enabled=true
+20:34:49.943 SC_EVENT idleLockActivated
+20:34:49.991 SC_DIAG : native request owner=false pending=false
+20:34:50.151 SC_DIAG lifecycle AppLifecycleState.inactive needs=false auth=true locked=true
+20:34:55.104 SC_EVENT biometricAuthFailed
+20:34:55.111 SC_DIAG result SecureContentEventType.biometricAuthFailed gen=9 cur=9 crossed=false state=AppLifecycleState.inactive
+20:34:56.501 SC_DIAG lifecycle AppLifecycleState.hidden needs=false auth=false locked=true
+20:34:56.501 SC_DIAG lifecycle AppLifecycleState.paused needs=true auth=false locked=true
+20:35:07.330 SC_DIAG lifecycle AppLifecycleState.hidden needs=true auth=false locked=true
+20:35:07.331 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=false locked=true
+20:35:07.616 SC_DIAG lifecycle AppLifecycleState.resumed needs=true auth=false locked=true
+20:35:07.616 SC_DIAG lockAndRequest auth=false enabled=true
+20:35:07.624 SC_EVENT idleLockActivated
+20:35:07.625 SC_DIAG : native request owner=false pending=false
+20:35:07.653 SC_EVENT integrityRiskDetected
+20:35:07.784 SC_DIAG lifecycle AppLifecycleState.inactive needs=true auth=true locked=true
+20:35:09.940 SC_EVENT idleLockActivated
+20:35:26.609 SC_EVENT biometricAuthFailed
+20:35:26.620 SC_DIAG result SecureContentEventType.biometricAuthFailed gen=10 cur=10 crossed=false state=AppLifecycleState.inactive
+20:35:26.868 SC_DIAG lifecycle AppLifecycleState.resumed needs=false auth=false locked=true
+20:35:26.877 SC_EVENT idleLockActivated
+20:35:26.891 SC_EVENT integrityRiskDetected
+20:35:36.693 SC_DIAG lockAndRequest auth=false enabled=true
+20:35:36.695 SC_EVENT idleLockActivated
+20:35:36.723 SC_DIAG : native request owner=false pending=false
+20:35:36.728 SC_EVENT biometricUnavailable
+20:35:36.728 SC_DIAG result SecureContentEventType.biometricUnavailable gen=11 cur=11 crossed=false state=AppLifecycleState.resumed
+20:35:56.701 SC_EVENT idleLockActivated

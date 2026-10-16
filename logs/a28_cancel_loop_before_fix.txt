@@ -1,0 +1,8 @@
+10-16 19:30:59.538  1670  1670 V FingerprintService: startAuthentication(com.secure_content.example)
+10-16 19:30:59.550  1850  1850 D FingerprintDialogImpl: showFingerprintDialog
+10-16 19:31:21.098  1850  1850 D FingerprintDialogImpl: handleHideDialog, userCanceled: false
+10-16 19:31:22.420  1670  1670 V FingerprintService: startAuthentication(com.secure_content.example)
+10-16 19:31:22.422  1850  1850 D FingerprintDialogImpl: showFingerprintDialog
+10-16 19:31:52.132  1850  1850 D FingerprintDialogImpl: handleHideDialog, userCanceled: false
+10-16 19:31:53.286  1670  1670 V FingerprintService: startAuthentication(com.secure_content.example)
+10-16 19:31:53.291  1850  1850 D FingerprintDialogImpl: showFingerprintDialog

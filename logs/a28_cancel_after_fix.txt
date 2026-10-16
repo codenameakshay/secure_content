@@ -1,0 +1,10 @@
+10-16 19:35:28.819  1850  1850 D FingerprintDialogImpl: handleHideDialog, userCanceled: false
+10-16 19:35:29.328  1670  1670 V FingerprintService: startAuthentication(com.secure_content.example)
+10-16 19:35:29.329  1850  1850 D FingerprintDialogImpl: showFingerprintDialog
+10-16 19:35:49.989  1850  1850 D FingerprintDialogImpl: handleHideDialog, userCanceled: false
+10-16 19:35:49.992  1536  1536 D android.hardware.biometrics.fingerprint@2.1-service: onError(5)
+10-16 19:35:49.995  1536  1536 D android.hardware.biometrics.fingerprint@2.1-service: onError(5)
+10-16 19:36:14.209  1670  1670 V FingerprintService: startAuthentication(com.secure_content.example)
+10-16 19:36:14.210  1850  1850 D FingerprintDialogImpl: showFingerprintDialog
+10-16 19:36:22.262  1536  1536 D android.hardware.biometrics.fingerprint@2.1-service: onError(5)
+10-16 19:36:24.317  1850  1850 D FingerprintDialogImpl: handleHideDialog, userCanceled: false

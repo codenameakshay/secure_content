@@ -1,0 +1,5 @@
+10-16 20:10:10.341  6558  6558 I flutter : SC_EVENT integrityRiskDetected
+10-16 20:10:10.406  6558  6558 I flutter : SC_EVENT platformReady
+10-16 20:10:17.808  6558  6558 I flutter : SC_EVENT biometricAuthSucceeded
+10-16 20:10:17.841  6558  6558 I flutter : SC_EVENT idleLockReleased
+10-16 20:10:20.744  6558  6558 I flutter : SC_EVENT screenshotCaptured

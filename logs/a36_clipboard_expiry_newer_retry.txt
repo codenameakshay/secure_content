@@ -1,0 +1,82 @@
+20:14:10.738 SC_CLIP null
+20:14:11.765 SC_CLIP null
+20:14:12.733 SC_CLIP null
+20:14:13.794 SC_CLIP null
+20:14:14.791 SC_EVENT clipboardSet
+20:14:14.801 SC_CLIP Sensitive counter=0
+20:14:15.732 SC_CLIP Sensitive counter=0
+20:14:16.734 SC_CLIP Sensitive counter=0
+20:14:17.733 SC_CLIP Sensitive counter=0
+20:14:18.764 SC_CLIP Sensitive counter=0
+20:14:18.841 SC_EVENT idleLockActivated
+20:14:19.771 SC_CLIP Sensitive counter=0
+20:14:20.734 SC_CLIP Sensitive counter=0
+20:14:21.746 SC_CLIP Sensitive counter=0
+20:14:22.838 SC_CLIP Sensitive counter=0
+20:14:23.738 SC_CLIP Sensitive counter=0
+20:14:24.736 SC_CLIP Sensitive counter=0
+20:14:24.796 SC_EVENT clipboardCleared
+20:14:25.760 SC_CLIP null
+20:14:26.734 SC_CLIP null
+20:14:27.733 SC_CLIP null
+20:14:28.749 SC_CLIP null
+20:14:29.739 SC_CLIP null
+20:14:30.734 SC_CLIP null
+20:14:31.732 SC_CLIP null
+20:14:32.732 SC_CLIP null
+20:14:33.734 SC_CLIP null
+20:14:34.750 SC_CLIP null
+20:14:35.739 SC_CLIP null
+20:14:36.737 SC_CLIP null
+20:14:37.737 SC_CLIP null
+20:14:38.740 SC_CLIP null
+20:14:39.737 SC_CLIP null
+20:14:40.129 SC_EVENT clipboardSet
+20:14:40.741 SC_CLIP Sensitive counter=0
+20:14:41.744 SC_CLIP Sensitive counter=0
+20:14:42.784 SC_CLIP Sensitive counter=0
+20:14:43.751 SC_CLIP Sensitive counter=0
+20:14:44.735 SC_CLIP Sensitive counter=0
+20:14:45.738 SC_CLIP Sensitive counter=0
+20:14:46.735 SC_CLIP newer plain copy
+20:14:47.818 SC_CLIP newer plain copy
+20:14:48.794 SC_CLIP newer plain copy
+20:14:49.737 SC_CLIP newer plain copy
+20:14:50.147 SC_EVENT clipboardCleared
+20:14:50.740 SC_CLIP newer plain copy
+20:14:52.045 SC_CLIP newer plain copy
+20:14:52.847 SC_CLIP newer plain copy
+20:14:53.744 SC_CLIP newer plain copy
+20:14:54.739 SC_CLIP newer plain copy
+20:14:55.743 SC_CLIP newer plain copy
+20:14:56.746 SC_CLIP newer plain copy
+20:14:57.792 SC_CLIP newer plain copy
+20:14:58.744 SC_CLIP newer plain copy
+20:14:59.738 SC_CLIP newer plain copy
+20:15:00.835 SC_CLIP newer plain copy
+20:15:02.449 SC_CLIP newer plain copy
+20:15:02.752 SC_CLIP newer plain copy
+20:15:03.734 SC_CLIP newer plain copy
+20:15:04.736 SC_CLIP newer plain copy
+20:15:05.733 SC_CLIP newer plain copy
+20:15:06.733 SC_CLIP newer plain copy
+20:15:07.738 SC_CLIP newer plain copy
+20:15:08.806 SC_CLIP newer plain copy
+20:15:09.768 SC_CLIP newer plain copy
+20:15:10.766 SC_CLIP newer plain copy
+20:15:10.953 SC_EVENT clipboardSet
+20:15:11.736 SC_CLIP Sensitive counter=0
+20:15:35.628 SC_EVENT idleLockActivated
+20:15:35.629 SC_EVENT idleLockActivated
+20:15:35.631 SC_EVENT clipboardCleared
+20:15:39.420 SC_EVENT integrityRiskDetected
+20:15:39.425 Denying clipboard access to com.secure_content.example, application is not in focus nor is it a system service for user 0
+20:15:40.024 Denying clipboard access to com.secure_content.example, application is not in focus nor is it a system service for user 0
+20:15:40.281 SC_CLIP null
+20:15:40.392 Denying clipboard access to com.secure_content.example, application is not in focus nor is it a system service for user 0
+20:15:40.392 SC_CLIP null
+20:15:44.664 SC_EVENT biometricAuthSucceeded
+20:15:44.683 SC_EVENT idleLockReleased
+20:15:39.425 Denying clipboard access to com.secure_content.example, application is not in focus nor is it a system service for user 0
+20:15:40.024 Denying clipboard access to com.secure_content.example, application is not in focus nor is it a system service for user 0
+20:15:40.392 Denying clipboard access to com.secure_content.example, application is not in focus nor is it a system service for user 0

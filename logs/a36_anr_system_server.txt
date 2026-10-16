@@ -1,0 +1,17 @@
+10-16 20:24:34.487   695  7884 E ActivityManager: ANR in com.secure_content.example (com.secure_content.example/.MainActivity)
+10-16 20:24:34.487   695  7884 E ActivityManager: PID: 7247
+10-16 20:24:34.487   695  7884 E ActivityManager: Reason: Input dispatching timed out (624ce7f com.secure_content.example/com.secure_content.example.MainActivity is not responding. Waited 5172ms for FocusEvent(hasFocus=true)).
+10-16 20:24:34.487   695  7884 E ActivityManager: Parent: com.secure_content.example/.MainActivity
+10-16 20:24:34.487   695  7884 E ActivityManager: ErrorId: 3a65a367-1387-4ca2-ab43-7c1b21ed8b44
+10-16 20:24:34.487   695  7884 E ActivityManager: Frozen: false
+10-16 20:24:34.487   695  7884 E ActivityManager: Load: 6.99 / 7.15 / 6.63
+10-16 20:24:34.487   695  7884 E ActivityManager: ANR in com.secure_content.example (com.secure_content.example/.MainActivity)
+10-16 20:24:34.487   695  7884 E ActivityManager: PID: 7247
+10-16 20:24:34.487   695  7884 E ActivityManager: Reason: Input dispatching timed out (624ce7f com.secure_content.example/com.secure_content.example.MainActivity is not responding. Waited 5172ms for FocusEvent(hasFocus=true)).
+10-16 20:24:34.487   695  7884 E ActivityManager: Parent: com.secure_content.example/.MainActivity
+10-16 20:24:34.487   695  7884 E ActivityManager: ErrorId: 3a65a367-1387-4ca2-ab43-7c1b21ed8b44
+10-16 20:24:34.487   695  7884 E ActivityManager: Frozen: false
+10-16 20:24:34.487   695  7884 E ActivityManager: Load: 6.99 / 7.15 / 6.63
+Subject: Blocked in monitor com.android.server.wm.WindowManagerService on monitor thread (watchdog.monitor) for 16s, Blocked in handler on ui thread (android.ui) for 16s
+Watchdog-Type: pre_watchdog
+

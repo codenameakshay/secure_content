@@ -1,0 +1,14 @@
+flutter: SC_EVENT integrityRiskDetected
+flutter: SC_EVENT platformReady
+flutter: SC_EVENT biometricAuthFailed
+flutter: SC_EVENT idleLockActivated
+Restarted application in 34,565ms.
+flutter: SC_EVENT integrityRiskDetected
+flutter: SC_EVENT idleLockActivated
+flutter: SC_EVENT biometricAuthFailed
+flutter: SC_EVENT idleLockActivated
+flutter: SC_EVENT appSwitcherProtected
+flutter: SC_EVENT biometricAuthFailed
+flutter: SC_EVENT appSwitcherUnprotected
+flutter: SC_EVENT integrityRiskDetected
+flutter: SC_EVENT idleLockActivated

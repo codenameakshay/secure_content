@@ -1,0 +1,34 @@
+** TEST BUILD SUCCEEDED **
+Test Case '-[SecureContentRuntimeTests.SecureContentAuthenticationTests testCancelledAndReplacedRequestsCannotUnlock]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentAuthenticationTests testCancelledAndReplacedRequestsCannotUnlock]' passed (0.053 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentAuthenticationTests testDuplicateTerminalCallbacksEmitOnce]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentAuthenticationTests testDuplicateTerminalCallbacksEmitOnce]' passed (0.002 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.055 (0.057) seconds
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testDetachingAuthenticationContextInvalidatesItWithoutShowingPrompt]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testDetachingAuthenticationContextInvalidatesItWithoutShowingPrompt]' passed (0.015 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testEngineDisableRemovesOnlyThatEnginesOverlay]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testEngineDisableRemovesOnlyThatEnginesOverlay]' passed (0.061 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testExpiredTimerPreservesANewerIdenticalClipboardCopy]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testExpiredTimerPreservesANewerIdenticalClipboardCopy]' passed (3.779 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testExplicitClearPreservesANewerIdenticalClipboardCopy]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testExplicitClearPreservesANewerIdenticalClipboardCopy]' passed (1.229 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testExplicitClipboardClearRemovesOwnedContent]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testExplicitClipboardClearRemovesOwnedContent]' passed (2.333 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testInactiveWindowReconfigurationUpdatesCoverAndKeepsItOpaque]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testInactiveWindowReconfigurationUpdatesCoverAndKeepsItOpaque]' passed (11.778 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testLifecycleCoversAllWindowsAndKeepsInactiveScenesCoveredOnActivation]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testLifecycleCoversAllWindowsAndKeepsInactiveScenesCoveredOnActivation]' passed (0.028 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testReconciliationReattachesAnExternallyRemovedPrivacyCover]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testReconciliationReattachesAnExternallyRemovedPrivacyCover]' passed (0.002 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testSceneCaptureTraitsProtectOnlyCapturedWindows]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testSceneCaptureTraitsProtectOnlyCapturedWindows]' passed (0.004 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testScreenNotificationStillReconcilesCaptureOnModernIOS]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testScreenNotificationStillReconcilesCaptureOnModernIOS]' passed (0.002 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testSensitiveClipboardUsesSystemExpiration]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testSensitiveClipboardUsesSystemExpiration]' passed (2.782 seconds).
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testVeryLongClipboardTTLDoesNotOverflowDispatchDeadline]' started.
+Test Case '-[SecureContentRuntimeTests.SecureContentPluginRuntimeTests testVeryLongClipboardTTLDoesNotOverflowDispatchDeadline]' passed (2.896 seconds).
+	 Executed 12 tests, with 0 failures (0 unexpected) in 24.909 (24.946) seconds
+	 Executed 14 tests, with 0 failures (0 unexpected) in 24.964 (25.005) seconds
+	 Executed 14 tests, with 0 failures (0 unexpected) in 24.964 (25.009) seconds
+** TEST EXECUTE SUCCEEDED **
