@@ -219,6 +219,60 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
+    fun sharedWindowCoverEventsBelongToEachEngineRequest() {
+        val controller = focusedActivity()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val hostAccessibility = decor.importantForAccessibility
+        val secondMessenger = EventMessenger()
+        val secondBinding = engineBinding(secondMessenger)
+        val secondPlugin = SecureContentPlugin().also { it.onAttachedToEngine(secondBinding) }
+        try {
+            plugin.onAttachedToActivity(activityBinding(controller.get()))
+            secondPlugin.onAttachedToActivity(activityBinding(controller.get()))
+            plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+            secondPlugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+            controller.windowFocusChanged(false)
+            val cover = decor.children().single { it !in hostChildren }
+            assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+            assertEquals(listOf("platformReady", "appSwitcherProtected"), secondMessenger.eventTypes)
+
+            plugin.configureProtection(ProtectionConfig(false, true, 0xff000000))
+            assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+            assertEquals(listOf("platformReady", "appSwitcherProtected"), secondMessenger.eventTypes)
+            assertSame(cover, decor.children().single { it !in hostChildren })
+            assertEquals(0xff123456.toInt(), (cover.background as ColorDrawable).color)
+            assertTrue(isSecure(controller.get()))
+            assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, decor.importantForAccessibility)
+
+            secondPlugin.onDetachedFromEngine(secondBinding)
+            assertEquals(hostChildren, decor.children())
+            assertFalse(isSecure(controller.get()))
+            assertEquals(hostAccessibility, decor.importantForAccessibility)
+            controller.windowFocusChanged(true).windowFocusChanged(false)
+            assertEquals(hostChildren, decor.children())
+            assertEquals(listOf("platformReady", "appSwitcherProtected"), secondMessenger.eventTypes)
+
+            plugin.configureProtection(ProtectionConfig(true, true, 0xff000000))
+            assertEquals(hostChildren.size + 1, decor.childCount)
+            assertTrue(isSecure(controller.get()))
+            assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, decor.importantForAccessibility)
+            plugin.onDetachedFromActivity()
+            assertEquals(hostChildren, decor.children())
+            assertFalse(isSecure(controller.get()))
+            assertEquals(hostAccessibility, decor.importantForAccessibility)
+            assertEquals(
+                listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "appSwitcherProtected", "appSwitcherUnprotected"),
+                messenger.eventTypes,
+            )
+            assertEquals(listOf("platformReady", "appSwitcherProtected"), secondMessenger.eventTypes)
+        } finally {
+            plugin.onDetachedFromEngine(binding)
+            secondPlugin.onDetachedFromEngine(secondBinding)
+        }
+    }
+
+    @Test
     fun activityAttachedBeforeItsContentViewIsObservedWithoutInstallingTheDecorEarly() {
         var decorAfterAttach: View? = null
         AttachDuringCreateActivity.onCreateHook = {
