@@ -764,6 +764,87 @@ void main() {
     );
 
     scopeTestWidgets(
+      'a cancelled prompt is not shown again when the app regains focus',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+        await tester.pumpWidget(buildScope(policy: policy));
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        // The system prompt takes window focus; the user cancels it.
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthFailed,
+        );
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+        expect(find.text('Unlock with biometrics'), findsOneWidget);
+
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(biometricPromptCount, 2);
+        expect(find.text('Session locked'), findsOneWidget);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
+      },
+    );
+
+    scopeTestWidgets(
+      'a failed request finished in the background still prompts on resume',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+        await tester.pumpWidget(buildScope(policy: policy));
+        await tester.pump();
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthFailed,
+        );
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.tap(find.text('Unlock with biometrics'));
+        await tester.pump();
+        expect(biometricPromptCount, 2);
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricUnavailable,
+        );
+        await tester.pump();
+
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(biometricPromptCount, 3);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
+      },
+    );
+
+    scopeTestWidgets(
       'auth started before background is rejected after resume',
       (tester) async {
         SecureContentPlatform.debugIsSupportedPlatformOverride = true;

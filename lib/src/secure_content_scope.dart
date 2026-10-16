@@ -575,17 +575,19 @@ class _SecureContentScopeState extends State<SecureContentScope>
       }
       return;
     }
+    final backgrounded =
+        _appLifecycleState == AppLifecycleState.paused ||
+        _appLifecycleState == AppLifecycleState.hidden ||
+        _appLifecycleState == AppLifecycleState.detached;
+    // The prompt itself moves the app through inactive and back to resumed.
+    // Only a background transition may request another prompt.
+    _needsBiometricAuth = backgrounded;
     switch (outcome) {
       case SecureContentEventType.biometricAuthSucceeded:
-        _needsBiometricAuth = false;
         _updateState(() {
           _biometricUnavailable = false;
         });
-        if (_appLifecycleState == AppLifecycleState.paused ||
-            _appLifecycleState == AppLifecycleState.hidden ||
-            _appLifecycleState == AppLifecycleState.detached) {
-          _needsBiometricAuth = true;
-        } else {
+        if (!backgrounded) {
           _unlock();
         }
         break;
