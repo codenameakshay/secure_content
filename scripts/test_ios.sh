@@ -45,7 +45,8 @@ if [[ "$build_only" == true ]]; then
   exit 0
 fi
 
-simulator_id="$(xcrun simctl list devices available -j | python3 -c '
+simulator_id="${IOS_SIMULATOR_ID:-}"
+[[ -n "$simulator_id" ]] || simulator_id="$(xcrun simctl list devices available -j | python3 -c '
 import json, sys
 devices = json.load(sys.stdin)["devices"]
 available = [device for runtime in devices.values() for device in runtime
