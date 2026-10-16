@@ -1246,6 +1246,38 @@ void main() {
         expect(hasWatermark(), isFalse);
       },
     );
+
+    scopeTestWidgets('the risk watermark is clipped to the scope', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox(
+              width: 200,
+              height: 100,
+              child: SecureContentScope(
+                enabled: true,
+                child: const Text('protected'),
+              ),
+            ),
+          ),
+        ),
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+
+      final watermark = find.descendant(
+        of: find.byWidgetPredicate(
+          (widget) => widget.runtimeType.toString() == '_RiskWatermarkLayer',
+        ),
+        matching: find.byType(CustomPaint),
+      );
+      expect(
+        tester.renderObject(watermark),
+        paints..clipRect(rect: Offset.zero & const Size(200, 100)),
+      );
+    });
   });
 
   // (c) onUnlock actually unlocks

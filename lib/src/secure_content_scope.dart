@@ -924,6 +924,7 @@ class _RiskWatermarkPainter extends CustomPainter {
     final spacingX = textPainter.width + 52;
     final spacingY = textPainter.height + 42;
 
+    canvas.clipRect(Offset.zero & size);
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.rotate(-math.pi / 6);

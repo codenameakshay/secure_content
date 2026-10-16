@@ -13,6 +13,7 @@
 - Preserve newer clipboard copies, retry Android cleanup after access returns, and use local-only system pasteboard expiration on iOS.
 - Reconcile iOS covers across scenes, screens, configuration changes, and engine teardown. Keep privacy backgrounds opaque and add the example Face ID usage description.
 - Keep a cancelled or failed biometric prompt from opening again when the app regains focus. A new prompt opens only after the app returns from the background.
+- Clip the risk watermark to its `SecureContentScope` instead of painting over the rest of the screen.
 - Add adversarial Dart tests, Android Robolectric tests, and native iOS policy and simulator tests. See the [audit record](docs/reliability-audit.md) for individual fixes and verification limits.
 
 ## 2.1.0
