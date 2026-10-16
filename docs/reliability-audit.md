@@ -87,8 +87,8 @@ checks last-writer priority when two sources have unequal update counts.
 
 ### Executed checks
 
-The final local `make check` passes with the repository-pinned Flutter 3.44.3:
-formatting, static analysis, all 44 package tests, and the example test.
+The final local `make check` passes with the repository-pinned Flutter 3.47.4:
+formatting, static analysis, all 82 package tests, and the example test.
 The package suite includes four scope seeds (`0x5eed`, `0x1bad`, `0xc0ffee`,
 `0x7a11`) with 256 lifecycle/policy actions each, totaling 1,024 actions.
 It also covers initial setup failure/retry, stale replies, protected input,

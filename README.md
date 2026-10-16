@@ -71,7 +71,7 @@ fingerprint implementation required by stable Biometric on Android 23–27.
 
 ```yaml
 dependencies:
-  secure_content: ^2.1.0
+  secure_content: ^3.0.0
 ```
 
 For Face ID authentication, add a usage description to the host app's

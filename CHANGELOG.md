@@ -1,4 +1,4 @@
-## Unreleased
+## 3.0.0
 
 - Rewrite native coordination around dedicated authentication, clipboard, capture, and window owners with typed internal events and main-actor isolation on iOS. See the [native audit](docs/native-rewrite-audit.md).
 - Isolate biometric outcomes across engines, cancellation, and activity recreation. Reject Android prompts after fragment state is saved or when a legacy host theme is incompatible. Release detached clipboard observers without retaining the plugin.
