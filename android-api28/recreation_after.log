@@ -1,0 +1,36 @@
+10-16 23:19:35.921 D/SC_NATIVE( 5681): attachEngine plugin=260673415
+10-16 23:19:36.944 I/flutter ( 5681): SC_EVENT idleLockActivated
+10-16 23:19:38.066 D/SC_NATIVE( 5681): request self=187551872 owned=false pending=false activity=142079100
+10-16 23:19:38.117 I/flutter ( 5681): SC_EVENT integrityRiskDetected
+10-16 23:19:38.135 I/flutter ( 5681): SC_EVENT platformReady
+10-16 23:19:41.100 D/SC_NATIVE( 5681): cancel self=187551872 emit=true owned=true pending=false
+10-16 23:19:41.129 D/SC_NATIVE( 5681): cancel self=187551872 emit=true owned=true pending=true
+10-16 23:19:41.131 D/SC_NATIVE( 5681): cancel self=187551872 emit=false owned=true pending=true
+10-16 23:19:41.131 D/SC_NATIVE( 5681): cancel self=187551872 emit=true owned=true pending=true
+10-16 23:19:41.544 D/SC_NATIVE( 5681): attachEngine plugin=35963723
+10-16 23:19:42.631 I/flutter ( 5681): SC_EVENT idleLockActivated
+10-16 23:19:43.236 D/SC_NATIVE( 5681): request self=153816676 owned=false pending=false activity=23424163
+10-16 23:19:43.238 D/SC_NATIVE( 5681): acquire failed self=153816676 holder=187551872
+10-16 23:19:43.245 I/flutter ( 5681): SC_EVENT biometricAuthFailed
+10-16 23:19:43.251 I/flutter ( 5681): SC_EVENT integrityRiskDetected
+10-16 23:19:43.299 I/flutter ( 5681): SC_EVENT platformReady
+10-16 23:19:43.332 D/SC_NATIVE( 5681): finish self=187551872 event=BIOMETRIC_FAILED current=true pending=true
+10-16 23:20:10.273 D/SC_NATIVE( 5681): request self=153816676 owned=false pending=false activity=23424163
+10-16 23:20:15.228 D/SC_NATIVE( 5681): finish self=153816676 event=BIOMETRIC_SUCCEEDED current=true pending=false
+10-16 23:20:15.246 I/flutter ( 5681): SC_EVENT biometricAuthSucceeded
+10-16 23:20:15.250 I/flutter ( 5681): SC_EVENT idleLockReleased
+10-16 23:20:15.784 I/flutter ( 5681): SC_EVENT integrityRiskDetected
+10-16 23:20:16.555 D/SC_NATIVE( 5681): cancel self=153816676 emit=true owned=false pending=false
+10-16 23:20:16.558 D/SC_NATIVE( 5681): cancel self=153816676 emit=false owned=false pending=false
+10-16 23:20:16.558 D/SC_NATIVE( 5681): cancel self=153816676 emit=true owned=false pending=false
+10-16 23:20:16.958 D/SC_NATIVE( 5681): attachEngine plugin=229686355
+10-16 23:20:17.896 I/flutter ( 5681): SC_EVENT idleLockActivated
+10-16 23:20:18.525 D/SC_NATIVE( 5681): request self=89738383 owned=false pending=false activity=166958385
+10-16 23:20:18.556 I/flutter ( 5681): SC_EVENT integrityRiskDetected
+10-16 23:20:18.657 I/flutter ( 5681): SC_EVENT platformReady
+# tapped Unlock with biometrics, then emu finger touch 1
+10-16 23:20:10.273 D/SC_NATIVE( 5681): request self=153816676 owned=false pending=false activity=23424163
+10-16 23:20:15.228 D/SC_NATIVE( 5681): finish self=153816676 event=BIOMETRIC_SUCCEEDED current=true pending=false
+10-16 23:20:15.246 I/flutter ( 5681): SC_EVENT biometricAuthSucceeded
+10-16 23:20:15.250 I/flutter ( 5681): SC_EVENT idleLockReleased
+10-16 23:20:15.784 I/flutter ( 5681): SC_EVENT integrityRiskDetected

@@ -1,0 +1,11 @@
+10-16 23:09:09.358 I/flutter ( 5426): SC_EVENT idleLockActivated
+10-16 23:09:11.678 I/flutter ( 5426): SC_EVENT integrityRiskDetected
+10-16 23:09:12.142 I/flutter ( 5426): SC_EVENT platformReady
+10-16 23:09:14.949 I/flutter ( 5426): SC_EVENT biometricAuthSucceeded
+10-16 23:09:14.971 I/flutter ( 5426): SC_EVENT idleLockReleased
+10-16 23:09:15.693 I/flutter ( 5426): SC_EVENT integrityRiskDetected
+10-16 23:09:48.730 I/flutter ( 5426): SC_EVENT idleLockActivated
+10-16 23:09:48.883 I/flutter ( 5426): SC_EVENT integrityRiskDetected
+10-16 23:09:52.878 I/flutter ( 5426): SC_EVENT biometricAuthSucceeded
+10-16 23:09:52.879 I/flutter ( 5426): SC_EVENT idleLockReleased
+10-16 23:09:53.360 I/flutter ( 5426): SC_EVENT integrityRiskDetected

@@ -1,0 +1,17 @@
+10-16 22:53:52.465 D/SC_NATIVE( 4473): attachEngine plugin=218937864
+10-16 22:53:55.018 D/SC_NATIVE( 4473): request self=107074994 owned=false pending=false activity=259785294
+10-16 22:53:55.085 I/flutter ( 4473): SC_EVENT integrityRiskDetected
+10-16 22:53:55.368 I/flutter ( 4473): SC_EVENT platformReady
+10-16 22:54:13.615 I/flutter ( 4473): SC_EVENT idleLockActivated
+10-16 22:54:42.912 D/SC_NATIVE( 4473): cancel self=107074994 emit=true owned=true pending=false
+10-16 22:54:42.952 D/SC_NATIVE( 4473): cancel self=107074994 emit=true owned=true pending=true
+10-16 22:54:42.971 D/SC_NATIVE( 4473): cancel self=107074994 emit=false owned=true pending=true
+10-16 22:54:42.971 D/SC_NATIVE( 4473): cancel self=107074994 emit=true owned=true pending=true
+10-16 22:54:43.836 D/SC_NATIVE( 4473): attachEngine plugin=69873960
+10-16 22:54:45.678 D/SC_NATIVE( 4473): request self=185583821 owned=false pending=false activity=140188576
+10-16 22:54:45.683 D/SC_NATIVE( 4473): acquire failed self=185583821 holder=107074994
+10-16 22:54:45.718 I/flutter ( 4473): SC_EVENT biometricUnavailable
+10-16 22:54:45.724 I/flutter ( 4473): SC_EVENT integrityRiskDetected
+10-16 22:54:45.855 I/flutter ( 4473): SC_EVENT platformReady
+10-16 22:54:46.074 D/SC_NATIVE( 4473): finish self=107074994 event=BIOMETRIC_FAILED current=true pending=true
+10-16 22:55:04.843 I/flutter ( 4473): SC_EVENT idleLockActivated

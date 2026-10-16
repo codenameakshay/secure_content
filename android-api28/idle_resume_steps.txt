@@ -1,0 +1,6 @@
+ok: first prompt (23:09:13)
+ok: first unlock (23:09:16)
+HOME at 23:09:19
+resume at 23:09:49
+ok: second prompt (23:09:50)
+ok: second unlock (23:09:54)
