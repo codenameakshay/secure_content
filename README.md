@@ -160,19 +160,23 @@ component of `appSwitcherColor` does not make protected content visible.
 ## Android App Switcher Cover
 
 Android uses `FLAG_SECURE` for capture protection and for the snapshot that
-Recents stores. When `protectInAppSwitcher` is true, Android also sets the
-navigation-bar color to `appSwitcherColor`. While the app window does not have
-focus, Android covers the full window with an opaque `appSwitcherColor` fill
-and emits `appSwitcherProtected`. When the window gets focus again, Android
-removes the cover and emits `appSwitcherUnprotected`. The alpha component of
-`appSwitcherColor` is ignored.
+Recents stores. When native protection is enabled and
+`protectInAppSwitcher` is true, Android also sets the navigation-bar color to
+`appSwitcherColor`. When the Activity window loses focus outside multi-window
+mode, Android covers it with an opaque `appSwitcherColor` fill. The alpha
+component of `appSwitcherColor` is ignored. `appSwitcherProtected` means this
+engine's cover request has started; `appSwitcherUnprotected` means it has
+ended. Protection reconfiguration, disabling protection, and Activity
+detachment can also end this engine's request. Another engine may still keep
+the shared window covered. No events are sent after this engine detaches.
 
-If the user opens Recents directly from the app, Android shows the running app
-as a live preview, not the stored snapshot. The cover hides protected content
-in this preview. With gesture navigation, the cover is in place when the
-gesture starts. With three-button navigation, Android removes focus from the
-app after the Recents animation starts, so the first frames of the animation
-can show the app.
+On Android 12+ devices and launchers that show the running task as a live
+Recents preview, the cover hides its content after the Activity loses focus.
+Other Recents cards use task snapshots, which `FLAG_SECURE` protects. Exact
+preview behavior depends on Android version and launcher. In our observed
+gesture-navigation flow, the cover is in place when the gesture starts. In our
+observed three-button flow, Android removes focus after the Recents animation
+starts, so its first frames can show the app.
 
 The cover also appears when the notification shade, a system dialog, a
 biometric prompt, or another window of the app (such as a native dialog) takes
