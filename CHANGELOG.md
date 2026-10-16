@@ -6,12 +6,15 @@
 - Correct the Swift language mode and enable complete concurrency checking. Preserve UIKit integration without adding SwiftUI.
 - Update the native toolchains and Pigeon bindings. Require Flutter 3.44+ and Android compile SDK 37, with Android API 23 and iOS 13 deployment minimums unchanged. See [version compatibility](docs/native-toolchain.md).
 - Keep scoped content covered until native protection is ready. Ignore stale capture queries and biometric results across background transitions.
+- Require a fresh biometric result after resume or re-enable when a shared prompt was already in flight.
 - Block protected keyboard input and accessibility content while locked, hard-blocked, or captured. Count additional input when tracking inactivity.
 - Preserve biometric request ownership, deterministic source priority, unsupported-platform fallbacks, and safe parsing of malformed timestamps.
 - Fix Android biometric prompt construction on API 23–29. Use `FlutterFragmentActivity` in the example for older Android authentication.
 - Preserve host window flags and navigation colors, including multiple Flutter engines. Cancel obsolete native authentication during teardown.
 - Preserve newer clipboard copies, retry Android cleanup after access returns, and use local-only system pasteboard expiration on iOS.
 - Reconcile iOS covers across scenes, screens, configuration changes, and engine teardown. Keep privacy backgrounds opaque and add the example Face ID usage description.
+- Keep a cancelled or failed biometric prompt from opening again when the app regains focus. A new prompt opens only after the app returns from the background.
+- Clip the risk watermark to its `SecureContentScope` instead of painting over the rest of the screen.
 - Add adversarial Dart tests, Android Robolectric tests, and native iOS policy and simulator tests. See the [audit record](docs/reliability-audit.md) for individual fixes and verification limits.
 
 ## 2.1.0

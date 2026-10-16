@@ -38,6 +38,9 @@ class SecureContentService {
 
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
+  Future<SecureContentEventType>? get pendingBiometricRequest =>
+      _biometricRequest?.future;
+
   /// Requests biometric authentication and returns the outcome as one of
   /// [SecureContentEventType.biometricAuthSucceeded],
   /// [SecureContentEventType.biometricAuthFailed], or
