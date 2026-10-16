@@ -13,7 +13,7 @@ and launch resources remain unchanged.
 | --- | --- | --- |
 | Android authentication | Duplicate terminal callbacks emit multiple outcomes. | Consume request ownership before sending the result. |
 | Android authentication | AndroidX silently ignores requests after fragment state is saved. | Reject the request with an unavailable outcome before creating a prompt. |
-| Android authentication | Engines can replace callbacks before cancellation drains, including across activity recreation. | Keep the lease with the retained ViewModelStore until its terminal callback or final host destruction. A request that the draining lease blocks gets a failed outcome, not an unavailable one, so the lock screen does not report that biometrics are unavailable. |
+| Android authentication | Engines can replace callbacks before cancellation drains, including across activity recreation. | Keep the lease with the retained ViewModelStore until its terminal callback or final host destruction. A draining cancellation returns a failed outcome only when the current host and authenticators are usable. Unavailable hosts or authenticators remain unavailable. |
 | Android authentication | An incompatible activity theme crashes the API 23–27 fingerprint dialog asynchronously. | Check the dialog theme before requesting authentication and use AppCompat themes in the example. |
 | Android lifecycle | Engine teardown sends events to the detached messenger and retains clipboard references. | Disconnect the event sink first and retain only pending cleanup state. |
 | Android window ownership | Registry duplicates enabled flags and allocates filtered lists. | Track active owners in insertion order and restore the host's original state. |

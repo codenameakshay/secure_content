@@ -358,6 +358,89 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
+    fun canceledSelfLeaseReportsUnavailableWhenItsCurrentHostIsInvalid() {
+        val nullHostEvents = mutableListOf<NativeEvent>()
+        val nullHostActivity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val nullHostAuthentication = BiometricAuthentication(nullHostEvents::add)
+        nullHostAuthentication.request(nullHostActivity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        nullHostAuthentication.cancel(emitEvent = false)
+        val nullHostOwnership = ReflectionHelpers.getField<Any>(nullHostAuthentication, "ownershipKey")
+        nullHostAuthentication.request(null, "Retry without a host")
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), nullHostEvents)
+        assertSame(nullHostOwnership, ReflectionHelpers.getField(nullHostAuthentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(nullHostAuthentication, "cancellationPending"))
+
+        val finishingEvents = mutableListOf<NativeEvent>()
+        val finishingActivity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val finishingAuthentication = BiometricAuthentication(finishingEvents::add)
+        finishingAuthentication.request(finishingActivity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        finishingAuthentication.cancel(emitEvent = false)
+        val finishingOwnership = ReflectionHelpers.getField<Any>(finishingAuthentication, "ownershipKey")
+        finishingActivity.finish()
+        finishingAuthentication.request(finishingActivity, "Retry while finishing")
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), finishingEvents)
+        assertSame(finishingOwnership, ReflectionHelpers.getField(finishingAuthentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(finishingAuthentication, "cancellationPending"))
+
+        val destroyedEvents = mutableListOf<NativeEvent>()
+        val destroyedActivity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val destroyedAuthentication = BiometricAuthentication(destroyedEvents::add)
+        destroyedAuthentication.request(destroyedActivity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        destroyedAuthentication.cancel(emitEvent = false)
+        val destroyedOwnership = ReflectionHelpers.getField<Any>(destroyedAuthentication, "ownershipKey")
+        ReflectionHelpers.setField(destroyedActivity, "mDestroyed", true)
+        destroyedAuthentication.request(destroyedActivity, "Retry after destruction")
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), destroyedEvents)
+        assertSame(destroyedOwnership, ReflectionHelpers.getField(destroyedAuthentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(destroyedAuthentication, "cancellationPending"))
+    }
+
+    @Test
+    fun canceledSelfLeaseReportsUnavailableWhenFragmentStateIsSaved() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        val activity = controller.get()
+        val events = mutableListOf<NativeEvent>()
+        val authentication = BiometricAuthentication(events::add)
+        authentication.request(activity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        authentication.cancel(emitEvent = false)
+        val ownership = ReflectionHelpers.getField<Any>(authentication, "ownershipKey")
+        controller.pause().saveInstanceState(android.os.Bundle())
+
+        authentication.request(activity, "Retry after state was saved")
+
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), events)
+        assertSame(ownership, ReflectionHelpers.getField(authentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(authentication, "cancellationPending"))
+    }
+
+    @Test
+    @Config(sdk = [23])
+    fun canceledSelfLeaseReportsUnavailableWhenBiometricsBecomeUnavailable() {
+        val fingerprint = configureFingerprint()
+        val activity = Robolectric.buildActivity(FragmentActivity::class.java)
+            .also { it.get().setTheme(androidx.appcompat.R.style.Theme_AppCompat_DayNight_NoActionBar) }
+            .setup()
+            .get()
+        val events = mutableListOf<NativeEvent>()
+        val authentication = BiometricAuthentication(events::add)
+
+        authentication.request(activity, "Authenticate")
+        shadowOf(Looper.getMainLooper()).idle()
+        authentication.cancel(emitEvent = false)
+        val ownership = ReflectionHelpers.getField<Any>(authentication, "ownershipKey")
+        fingerprint.setIsHardwareDetected(false)
+        authentication.request(activity, "Retry without biometrics")
+
+        assertEquals(listOf(NativeEvent.BIOMETRIC_UNAVAILABLE), events)
+        assertSame(ownership, ReflectionHelpers.getField(authentication, "ownershipKey"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(authentication, "cancellationPending"))
+    }
+
+    @Test
     fun destroyingAnAndroidXHostReleasesItsCanceledAuthenticationLease() {
         val activityController = Robolectric.buildActivity(FragmentActivity::class.java).setup()
         plugin.onAttachedToActivity(activityBinding(activityController.get()))

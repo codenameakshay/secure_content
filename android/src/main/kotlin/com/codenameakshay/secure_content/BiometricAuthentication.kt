@@ -29,11 +29,7 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     private var cancellationPending = false
 
     fun request(activity: Activity?, reason: String) {
-        if (ownershipKey != null) {
-            // A canceled AndroidX prompt owns the host until its terminal callback
-            // arrives, for example after activity recreation. Report a failed
-            // attempt that can be repeated, not unavailable biometrics.
-            if (cancellationPending) onEvent(NativeEvent.BIOMETRIC_FAILED)
+        if (ownershipKey != null && !cancellationPending) {
             return
         }
         if (activity == null || activity.isFinishing || activity.isDestroyed) {
@@ -69,6 +65,11 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
             BiometricManager.BIOMETRIC_SUCCESS
         ) {
             onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+            return
+        }
+        if (ownershipKey != null) {
+            // A canceled AndroidX prompt still owns this host until its terminal callback.
+            onEvent(NativeEvent.BIOMETRIC_FAILED)
             return
         }
         val key = fragmentActivity?.viewModelStore ?: activity
