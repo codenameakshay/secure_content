@@ -3,6 +3,7 @@
 - Emit `idleLockActivated` and `idleLockReleased` once for each lock change. Resuming after the idle deadline, or reaching it while already locked, no longer repeats `idleLockActivated`. A scope that starts locked now emits `idleLockActivated`, and disabling a locked scope emits `idleLockReleased`.
 - Keep the normal lock screen when an Android activity is recreated during a biometric prompt, instead of reporting that biometrics are unavailable. A draining cancellation returns `biometricAuthFailed` only if the current host and authenticators are usable. Unavailable hosts or authenticators still return `biometricUnavailable`.
 - Ignore stale custom unlock callbacks after scope disposal, preventing phantom idle-lock releases and new biometric prompts.
+- Cover the Android window with an opaque `appSwitcherColor` fill while it lacks focus outside multi-window mode, including in the Recents live preview. Emit `appSwitcherProtected` and `appSwitcherUnprotected` on Android. See [Android app switcher cover](README.md#android-app-switcher-cover).
 
 ## 3.0.0
 

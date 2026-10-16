@@ -155,16 +155,53 @@ SecureContentScope(
 The native iOS privacy cover always uses an opaque background. The alpha
 component of `appSwitcherColor` does not make protected content visible.
 
-> Note: `appSwitcherImageName` is iOS-only. Android uses `FLAG_SECURE` for
-> capture and app-switcher protection. When `protectInAppSwitcher` is true,
-> Android also sets the navigation-bar color to `appSwitcherColor`. Android
-> does not add a branded app-switcher overlay, and it ignores the image name.
->
-> On Android 12 and later, `FLAG_SECURE` blanks the snapshot that Recents
-> stores for the app. If the user opens Recents directly from the app, the
-> system shows the running app as a live preview until the app leaves the
-> foreground. This preview is the app's own screen, not a captured image, so
-> it can show protected content.
+> Note: `appSwitcherImageName` is iOS-only. Android ignores it.
+
+## Android App Switcher Cover
+
+Android uses `FLAG_SECURE` for capture protection and for the snapshot that
+Recents stores. When protection is enabled and `protectInAppSwitcher` is true,
+Android also sets the navigation-bar color to `appSwitcherColor`. While the
+activity window does not have focus, Android covers the full window with an
+opaque `appSwitcherColor` fill. When the window gets focus again, Android
+removes the cover. The alpha component of `appSwitcherColor` is ignored.
+
+A new window is not covered before Android first reports its focus, so the
+cover does not flash at launch. A window that is already shown without focus
+when the plugin attaches is covered at once. If the plugin opens a biometric
+prompt before the window's first focus report, it covers the window until the
+prompt ends or the window reports focus. If another window, such as the
+notification shade, has focus when a new window opens, the new window stays
+uncovered until its focus changes.
+
+Each engine emits `appSwitcherProtected` when its cover request starts and
+`appSwitcherUnprotected` when the request ends. A request also ends when
+protection is disabled or the activity detaches. Detaching the engine ends its
+request without more events. If two engines share a window, the window stays
+covered while either request is active.
+
+When the user opens Recents directly from the app, launchers on Android 12 and
+later can show the running app as a live preview instead of the stored
+snapshot. The cover hides protected content in this preview after the app
+window loses focus. With the Pixel launcher on Android 16, gesture navigation
+removes focus when the gesture starts, so the cover is in place for the whole
+animation. The Recents button removes focus after the animation starts, so the
+first frames of the animation can show the app. Other launchers can behave
+differently.
+
+The cover also appears when the notification shade, a system dialog, a
+biometric prompt, or another window of the app (such as a native dialog) takes
+focus. While the cover is shown, the app content is hidden from accessibility
+services.
+
+In multi-window mode, such as split screen, the app stays visible while another
+window has focus. Android does not add the cover in this mode, so the Recents
+live preview of a split-screen pair can show protected content.
+
+The cover cannot hide a Flutter view that uses a transparent `SurfaceView`
+(`RenderMode.surface` with `TransparencyMode.transparent`), because that
+surface draws above the window. `FlutterActivity` with a transparent background
+uses a `TextureView`, which the cover hides.
 
 ## Global Protection
 
@@ -210,6 +247,7 @@ Key event types include:
 - `biometricAuthSucceeded` / `biometricAuthFailed` / `biometricUnavailable`
 - `integritySafe` / `integrityRiskDetected`
 - `clipboardSet` / `clipboardCleared`
+- `appSwitcherProtected` / `appSwitcherUnprotected`
 - `idleLockActivated` / `idleLockReleased`
 
 ## Platform Support
