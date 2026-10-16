@@ -714,6 +714,21 @@ void main() {
           reason: 'seed=$seed actions=$actionCount step=$index',
         );
       }
+
+      final idleEvents = receivedEvents
+          .where(
+            (type) =>
+                type == SecureContentEventType.idleLockActivated ||
+                type == SecureContentEventType.idleLockReleased,
+          )
+          .toList();
+      for (var index = 1; index < idleEvents.length; index += 1) {
+        expect(
+          idleEvents[index],
+          isNot(idleEvents[index - 1]),
+          reason: 'seed=$seed idle lock event $index repeats the previous one',
+        );
+      }
     }
     semantics.dispose();
   });
@@ -1868,6 +1883,166 @@ void main() {
 
         expect(find.text('Custom Unlock'), findsNothing);
         expect(find.text('protected'), findsOneWidget);
+      },
+    );
+  });
+
+  group('idle lock events', () {
+    final idleEvents = <SecureContentEventType>[];
+
+    void recordIdleEvent(SecureContentEvent event) {
+      if (event.type == SecureContentEventType.idleLockActivated ||
+          event.type == SecureContentEventType.idleLockReleased) {
+        idleEvents.add(event.type);
+      }
+    }
+
+    setUp(idleEvents.clear);
+
+    Future<void> unlockWithBiometrics(WidgetTester tester) async {
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.biometricAuthSucceeded,
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    scopeTestWidgets('a scope mounted while inactive locks once', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(requireBiometricOnResume: true),
+          onEvent: recordIdleEvent,
+        ),
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(idleEvents, [SecureContentEventType.idleLockActivated]);
+
+      await unlockWithBiometrics(tester);
+      expect(idleEvents, [
+        SecureContentEventType.idleLockActivated,
+        SecureContentEventType.idleLockReleased,
+      ]);
+    });
+
+    scopeTestWidgets('resuming past the idle deadline locks once', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(
+            requireBiometricOnResume: true,
+            inactivityTimeout: Duration(milliseconds: 80),
+          ),
+          onEvent: recordIdleEvent,
+        ),
+      );
+      await tester.pump();
+      await unlockWithBiometrics(tester);
+      expect(idleEvents, [
+        SecureContentEventType.idleLockActivated,
+        SecureContentEventType.idleLockReleased,
+      ]);
+      idleEvents.clear();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(idleEvents, [SecureContentEventType.idleLockActivated]);
+
+      await unlockWithBiometrics(tester);
+      expect(idleEvents, [
+        SecureContentEventType.idleLockActivated,
+        SecureContentEventType.idleLockReleased,
+      ]);
+    });
+
+    scopeTestWidgets('the idle timer does not lock an already locked scope', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(
+            requireBiometricOnResume: true,
+            inactivityTimeout: Duration(milliseconds: 100),
+          ),
+          onEvent: recordIdleEvent,
+        ),
+      );
+      await tester.pump();
+      await unlockWithBiometrics(tester);
+      idleEvents.clear();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(find.text('Session locked'), findsOneWidget);
+      expect(idleEvents, [SecureContentEventType.idleLockActivated]);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await unlockWithBiometrics(tester);
+      expect(idleEvents, [
+        SecureContentEventType.idleLockActivated,
+        SecureContentEventType.idleLockReleased,
+      ]);
+    });
+
+    scopeTestWidgets('disabling a locked scope releases the lock once', (
+      tester,
+    ) async {
+      const policy = SecureContentPolicy(
+        inactivityTimeout: Duration(milliseconds: 10),
+      );
+      await tester.pumpWidget(
+        buildScope(policy: policy, onEvent: recordIdleEvent),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(idleEvents, [SecureContentEventType.idleLockActivated]);
+
+      await tester.pumpWidget(
+        buildScope(enabled: false, policy: policy, onEvent: recordIdleEvent),
+      );
+      await tester.pump();
+      expect(idleEvents, [
+        SecureContentEventType.idleLockActivated,
+        SecureContentEventType.idleLockReleased,
+      ]);
+    });
+
+    scopeTestWidgets(
+      'a biometric requirement added in the background locks once',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        await tester.pumpWidget(buildScope(onEvent: recordIdleEvent));
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.pumpWidget(
+          buildScope(
+            policy: const SecureContentPolicy(requireBiometricOnResume: true),
+            onEvent: recordIdleEvent,
+          ),
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        expect(idleEvents, [SecureContentEventType.idleLockActivated]);
+
+        await unlockWithBiometrics(tester);
+        expect(idleEvents, [
+          SecureContentEventType.idleLockActivated,
+          SecureContentEventType.idleLockReleased,
+        ]);
       },
     );
   });

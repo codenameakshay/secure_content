@@ -1,3 +1,7 @@
+## Unreleased
+
+- Emit `idleLockActivated` and `idleLockReleased` once for each lock change. Resuming after the idle deadline, or reaching it while already locked, no longer repeats `idleLockActivated`. A scope that starts locked now emits `idleLockActivated`, and disabling a locked scope emits `idleLockReleased`.
+
 ## 3.0.0
 
 - Rewrite native coordination around dedicated authentication, clipboard, capture, and window owners with typed internal events and main-actor isolation on iOS. See the [native audit](doc/native-rewrite-audit.md).
