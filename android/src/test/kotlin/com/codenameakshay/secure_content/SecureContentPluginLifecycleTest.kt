@@ -293,44 +293,56 @@ class SecureContentPluginLifecycleTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         assertFalse(decor.hasWindowFocus())
-        val initialCover = decor.children().single { it !in hostChildren }
-        assertSame(initialCover, decor.getChildAt(decor.childCount - 1))
-        assertEquals(0xff000000.toInt(), (initialCover.background as ColorDrawable).color)
-        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady"), messenger.eventTypes)
 
         controller.windowFocusChanged(true)
-        assertEquals(hostChildren, decor.children())
-        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
-
         controller.windowFocusChanged(false)
 
-        assertEquals(hostChildren.size + 1, decor.childCount)
-        assertEquals(
-            listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "appSwitcherProtected"),
-            messenger.eventTypes,
-        )
+        val cover = decor.children().single { it !in hostChildren }
+        assertSame(cover, decor.getChildAt(decor.childCount - 1))
+        assertEquals(0xff000000.toInt(), (cover.background as ColorDrawable).color)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
         plugin.onDetachedFromEngine(binding)
     }
 
     @Test
     @Config(sdk = [23, 28, 30, 36])
-    fun anInitiallyUnfocusedWindowIsCoveredWhenItsPreinstalledDecorAttaches() {
+    fun aLaunchingWindowIsNotCoveredBeforeItsFirstFocusReport() {
         val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
         val decor = controller.get().window.decorView as ViewGroup
         val hostChildren = decor.children()
         assertFalse(decor.isAttachedToWindow)
-        assertFalse(decor.hasWindowFocus())
-        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
         plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
 
         controller.visible()
-
         assertTrue(decor.isAttachedToWindow)
         assertFalse(decor.hasWindowFocus())
-        val cover = decor.children().single { it !in hostChildren }
-        assertSame(cover, decor.getChildAt(decor.childCount - 1))
-        assertEquals(0xff123456.toInt(), (cover.background as ColorDrawable).color)
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady"), messenger.eventTypes)
+
+        controller.windowFocusChanged(true)
+        controller.windowFocusChanged(false)
+
+        assertEquals(hostChildren.size + 1, decor.childCount)
         assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun anAttachedWindowWithoutFocusIsCoveredWhenThePluginAttaches() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup()
+        val decor = controller.get().window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        assertTrue(decor.isAttachedToWindow)
+        assertFalse(decor.hasWindowFocus())
+
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertEquals(listOf("appSwitcherProtected", "platformReady"), messenger.eventTypes)
         plugin.onDetachedFromEngine(binding)
     }
 

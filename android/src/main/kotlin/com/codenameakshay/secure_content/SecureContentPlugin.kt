@@ -139,7 +139,9 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             return
         }
         observedDecor = decor
-        windowFocused = decor.hasWindowFocus()
+        // A new window gets focus only after its first frame. Treating it as unfocused until then
+        // would flash the cover at every launch.
+        windowFocused = !decor.isAttachedToWindow || decor.hasWindowFocus()
         decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
         decor.addOnLayoutChangeListener(layoutListener)
     }
