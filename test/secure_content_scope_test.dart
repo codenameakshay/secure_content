@@ -16,10 +16,23 @@ void scopeTestWidgets(String description, WidgetTesterCallback body) {
     try {
       await body(tester);
     } finally {
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pumpWidget(const SizedBox.shrink());
+      final pendingRequest =
+          SecureContentService.instance.pendingBiometricRequest;
+      if (pendingRequest != null) {
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthFailed,
+        );
+        await tester.pump();
+        await tester.idle();
+        await pendingRequest;
+      }
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       await tester.idle();
+      expect(SecureContentService.instance.pendingBiometricRequest, isNull);
     }
   });
 }
@@ -707,6 +720,227 @@ void main() {
 
   group('biometric request lifecycle', () {
     scopeTestWidgets(
+      'a scope mounted inactive joins a current foreground biometric prompt',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        unawaited(SecureContent.requestBiometricAuth(reason: 'global prompt'));
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pumpWidget(
+          buildScope(
+            policy: const SecureContentPolicy(requireBiometricOnResume: true),
+          ),
+        );
+        await tester.pump();
+        expect(find.text('Session locked'), findsOneWidget);
+
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Session locked'), findsNothing);
+        expect(biometricPromptCount, 1);
+      },
+    );
+
+    scopeTestWidgets(
+      'scopes newly requiring biometrics share the current foreground prompt',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+
+        Widget twoScopes({
+          required bool enabled,
+          required SecureContentPolicy policy,
+        }) => MaterialApp(
+          home: Column(
+            children: [
+              Expanded(
+                child: SecureContentScope(
+                  key: const ValueKey('first'),
+                  enabled: enabled,
+                  policy: policy,
+                  child: const Text('first protected'),
+                ),
+              ),
+              Expanded(
+                child: SecureContentScope(
+                  key: const ValueKey('second'),
+                  enabled: enabled,
+                  policy: policy,
+                  child: const Text('second protected'),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        await tester.pumpWidget(
+          twoScopes(enabled: false, policy: const SecureContentPolicy()),
+        );
+        await tester.pump();
+        expect(biometricPromptCount, 0);
+
+        await tester.pumpWidget(twoScopes(enabled: true, policy: policy));
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Unlock with biometrics'), findsNothing);
+        expect(biometricPromptCount, 1);
+      },
+    );
+
+    scopeTestWidgets(
+      'a biometric result from before disable cannot unlock after re-enable',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+
+        await tester.pumpWidget(buildScope(policy: policy));
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        await tester.pumpWidget(buildScope(enabled: false, policy: policy));
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
+
+        await tester.pumpWidget(buildScope(policy: policy));
+        await tester.pump();
+        expect(find.text('Session locked'), findsOneWidget);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('Session locked'), findsOneWidget);
+        expect(biometricPromptCount, 2);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
+      },
+    );
+
+    scopeTestWidgets(
+      'a biometric result from before policy disable cannot unlock after re-enable',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const requiredPolicy = SecureContentPolicy(
+          requireBiometricOnResume: true,
+        );
+
+        await tester.pumpWidget(buildScope(policy: requiredPolicy));
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        await tester.pumpWidget(buildScope());
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
+
+        await tester.pumpWidget(buildScope(policy: requiredPolicy));
+        await tester.pump();
+        expect(find.text('Session locked'), findsOneWidget);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Session locked'), findsOneWidget);
+        expect(biometricPromptCount, 2);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
+      },
+    );
+
+    scopeTestWidgets('requiring biometrics in background prompts on resume', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      await tester.pumpWidget(buildScope());
+      await tester.pump();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(requireBiometricOnResume: true),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Session locked'), findsOneWidget);
+      expect(biometricPromptCount, 0);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(biometricPromptCount, 1);
+
+      SecureContentService.instance.emitLocalEvent(
+        SecureContentEventType.biometricAuthSucceeded,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('protected'), findsOneWidget);
+    });
+
+    for (final staleOutcome in <SecureContentEventType>[
+      SecureContentEventType.biometricAuthFailed,
+      SecureContentEventType.biometricUnavailable,
+    ]) {
+      scopeTestWidgets(
+        'a stale $staleOutcome result still requires a fresh prompt',
+        (tester) async {
+          SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+          const policy = SecureContentPolicy(requireBiometricOnResume: true);
+
+          await tester.pumpWidget(buildScope(policy: policy));
+          await tester.pump();
+          await tester.pumpWidget(buildScope(enabled: false, policy: policy));
+          await tester.pump();
+          await tester.pumpWidget(buildScope(policy: policy));
+          await tester.pump();
+
+          SecureContentService.instance.emitLocalEvent(staleOutcome);
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('Session locked'), findsOneWidget);
+          expect(biometricPromptCount, 2);
+
+          SecureContentService.instance.emitLocalEvent(
+            SecureContentEventType.biometricAuthSucceeded,
+          );
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('protected'), findsOneWidget);
+        },
+      );
+    }
+
+    scopeTestWidgets(
       'a result received while disabled cannot unlock on re-enable',
       (tester) async {
         SecureContentPlatform.debugIsSupportedPlatformOverride = true;
@@ -844,22 +1078,146 @@ void main() {
       },
     );
 
+    for (final backgroundState in <AppLifecycleState>[
+      AppLifecycleState.paused,
+      AppLifecycleState.hidden,
+      AppLifecycleState.detached,
+    ]) {
+      for (final outcome in <SecureContentEventType>[
+        SecureContentEventType.biometricAuthSucceeded,
+        SecureContentEventType.biometricAuthFailed,
+        SecureContentEventType.biometricUnavailable,
+      ]) {
+        scopeTestWidgets(
+          'a $outcome request completed in $backgroundState prompts on resume',
+          (tester) async {
+            SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+            const policy = SecureContentPolicy(requireBiometricOnResume: true);
+            await tester.pumpWidget(buildScope(policy: policy));
+            await tester.pump();
+            expect(biometricPromptCount, 1);
+
+            tester.binding.handleAppLifecycleStateChanged(backgroundState);
+            SecureContentService.instance.emitLocalEvent(outcome);
+            await tester.pump();
+            expect(find.text('Session locked'), findsOneWidget);
+
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            );
+            await tester.pump();
+            await tester.pump();
+            expect(biometricPromptCount, 2);
+            expect(find.text('Session locked'), findsOneWidget);
+
+            SecureContentService.instance.emitLocalEvent(
+              SecureContentEventType.biometricAuthSucceeded,
+            );
+            await tester.pump();
+            await tester.pump();
+            expect(find.text('protected'), findsOneWidget);
+          },
+        );
+      }
+    }
+
     scopeTestWidgets(
-      'auth started before background is rejected after resume',
+      'a shared request unlocks its current scope but not its re-enabled peer',
       (tester) async {
         SecureContentPlatform.debugIsSupportedPlatformOverride = true;
         const policy = SecureContentPolicy(requireBiometricOnResume: true);
-        await tester.pumpWidget(buildScope(policy: policy));
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
+
+        Widget twoScopes({bool firstEnabled = true}) => MaterialApp(
+          home: Column(
+            children: [
+              Expanded(
+                child: SecureContentScope(
+                  key: const ValueKey('first'),
+                  enabled: firstEnabled,
+                  policy: policy,
+                  child: const Text('first protected'),
+                ),
+              ),
+              Expanded(
+                child: SecureContentScope(
+                  key: const ValueKey('second'),
+                  enabled: true,
+                  policy: policy,
+                  child: const Text('second protected'),
+                ),
+              ),
+            ],
+          ),
         );
+
+        await tester.pumpWidget(twoScopes());
         await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        await tester.pumpWidget(twoScopes(firstEnabled: false));
+        await tester.pump();
+        expect(find.text('first protected'), findsOneWidget);
+
+        await tester.pumpWidget(twoScopes());
+        await tester.pump();
+        expect(find.text('Session locked'), findsNWidgets(2));
 
         SecureContentService.instance.emitLocalEvent(
           SecureContentEventType.biometricAuthSucceeded,
         );
         await tester.pump();
+        await tester.pump();
+        final firstScope = find.byKey(const ValueKey('first'));
+        final secondScope = find.byKey(const ValueKey('second'));
+        expect(
+          find.descendant(
+            of: firstScope,
+            matching: find.text('Unlock with biometrics'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: secondScope,
+            matching: find.text('Unlock with biometrics'),
+          ),
+          findsNothing,
+        );
+        expect(biometricPromptCount, 2);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Unlock with biometrics'), findsNothing);
+      },
+    );
+
+    scopeTestWidgets(
+      'a global request started before background cannot unlock after resume',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+
+        await tester.pumpWidget(buildScope(policy: policy));
+        await tester.pump();
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
+        expect(biometricPromptCount, 1);
+
+        unawaited(SecureContent.requestBiometricAuth(reason: 'global request'));
+        await tester.pump();
+        expect(biometricPromptCount, 2);
+
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
         await tester.pump();
         expect(find.text('Session locked'), findsOneWidget);
 
@@ -868,9 +1226,159 @@ void main() {
         );
         await tester.pump();
         await tester.pump();
-        expect(find.text('Session locked'), findsNothing);
+        expect(find.text('Session locked'), findsOneWidget);
+        expect(biometricPromptCount, 3);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('protected'), findsOneWidget);
       },
     );
+
+    scopeTestWidgets(
+      'disabling while a global request drains does not start a fresh prompt',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+        await tester.pumpWidget(buildScope(policy: policy));
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+
+        unawaited(SecureContent.requestBiometricAuth(reason: 'global request'));
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        await tester.pumpWidget(buildScope(enabled: false, policy: policy));
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(biometricPromptCount, 2);
+        expect(find.text('Unlock with biometrics'), findsNothing);
+      },
+    );
+
+    scopeTestWidgets(
+      'disposing while a global request drains does not start a fresh prompt',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+        await tester.pumpWidget(buildScope(policy: policy));
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+
+        unawaited(SecureContent.requestBiometricAuth(reason: 'global request'));
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        await tester.pumpWidget(const SizedBox.shrink());
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(biometricPromptCount, 2);
+      },
+    );
+
+    scopeTestWidgets(
+      'a new background during drain waits until the app resumes',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+        await tester.pumpWidget(buildScope(policy: policy));
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+
+        unawaited(SecureContent.requestBiometricAuth(reason: 'global request'));
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        expect(biometricPromptCount, 2);
+
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(biometricPromptCount, 3);
+
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Unlock with biometrics'), findsNothing);
+      },
+    );
+
+    for (final backgroundState in <AppLifecycleState>[
+      AppLifecycleState.paused,
+      AppLifecycleState.hidden,
+      AppLifecycleState.detached,
+    ]) {
+      for (final outcome in <SecureContentEventType>[
+        SecureContentEventType.biometricAuthSucceeded,
+        SecureContentEventType.biometricAuthFailed,
+        SecureContentEventType.biometricUnavailable,
+      ]) {
+        scopeTestWidgets(
+          'a $outcome request started before $backgroundState is rejected after resume',
+          (tester) async {
+            SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+            const policy = SecureContentPolicy(requireBiometricOnResume: true);
+            await tester.pumpWidget(buildScope(policy: policy));
+            tester.binding.handleAppLifecycleStateChanged(backgroundState);
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            );
+            await tester.pump();
+
+            SecureContentService.instance.emitLocalEvent(outcome);
+            await tester.pump();
+            await tester.pump();
+            expect(find.text('Session locked'), findsOneWidget);
+            expect(biometricPromptCount, 2);
+
+            SecureContentService.instance.emitLocalEvent(
+              SecureContentEventType.biometricAuthSucceeded,
+            );
+            await tester.pump();
+            await tester.pump();
+            expect(find.text('Session locked'), findsNothing);
+          },
+        );
+      }
+    }
   });
 
   scopeTestWidgets('capture cover blocks protected input and is fully opaque', (
@@ -1089,6 +1597,34 @@ void main() {
       // Internal state (the capture overlay) must still have updated
       // despite the callback throwing.
       expect(find.byType(ColoredBox), findsWidgets);
+    });
+  });
+
+  group('widget-test biometric request cleanup', () {
+    scopeTestWidgets('leaves a native biometric request pending', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(requireBiometricOnResume: true),
+        ),
+      );
+      await tester.pump();
+      expect(biometricPromptCount, 1);
+    });
+
+    scopeTestWidgets('a fresh test starts a new native biometric request', (
+      tester,
+    ) async {
+      SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(requireBiometricOnResume: true),
+        ),
+      );
+      await tester.pump();
+      expect(biometricPromptCount, 1);
     });
   });
 
