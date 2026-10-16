@@ -1,8 +1,10 @@
 package com.codenameakshay.secure_content
 
+import android.content.Context
 import android.graphics.Color
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.Window
 import android.view.WindowManager
 import androidx.annotation.MainThread
@@ -99,8 +101,8 @@ private object WindowProtectionRegistry {
             restoreNavigationBarColor(window, state)
         }
         if (state.requests.isEmpty()) {
-            restoreBaseline(window, state)
             states.remove(window)
+            restoreBaseline(window, state)
         } else {
             applyAggregate(window, state)
         }
@@ -122,24 +124,51 @@ private object WindowProtectionRegistry {
         var cover = (0 until decor.childCount).map(decor::getChildAt).firstOrNull { it.tag === coverTag }
         val color = state.requests.values.lastOrNull { it.coversWindow }?.appSwitcherColor
         if (color == null) {
-            cover?.let(decor::removeView)
             state.originalImportantForAccessibility?.let { decor.importantForAccessibility = it }
             state.originalImportantForAccessibility = null
+            cover?.let(decor::removeView)
             return
         }
+        val needsAdding = cover == null
         if (cover == null) {
-            cover = View(decor.context).apply {
+            cover = PrivacyCover(decor.context).apply {
                 tag = coverTag
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
-            decor.addView(cover, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        } else if (decor.getChildAt(decor.childCount - 1) !== cover) {
-            cover.bringToFront()
         }
         cover.setBackgroundColor(color or Color.BLACK)
         if (state.originalImportantForAccessibility == null) {
             state.originalImportantForAccessibility = decor.importantForAccessibility
             decor.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+        if (needsAdding) {
+            decor.addView(cover, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        } else if (decor.getChildAt(decor.childCount - 1) !== cover) {
+            cover.bringToFront()
+        }
+    }
+
+    private class PrivacyCover(context: Context) : View(context), ViewTreeObserver.OnPreDrawListener {
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            viewTreeObserver.addOnPreDrawListener(this)
+        }
+
+        override fun onDetachedFromWindow() {
+            viewTreeObserver.removeOnPreDrawListener(this)
+            super.onDetachedFromWindow()
+        }
+
+        override fun onPreDraw(): Boolean {
+            val decor = parent as? ViewGroup ?: return true
+            var highestSiblingZ = 0f
+            for (index in 0 until decor.childCount) {
+                val sibling = decor.getChildAt(index)
+                if (sibling !== this) highestSiblingZ = maxOf(highestSiblingZ, sibling.z)
+            }
+            if (z != highestSiblingZ) z = highestSiblingZ
+            if (decor.getChildAt(decor.childCount - 1) !== this) bringToFront()
+            return true
         }
     }
 
