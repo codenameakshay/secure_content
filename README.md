@@ -159,6 +159,12 @@ component of `appSwitcherColor` does not make protected content visible.
 > capture and app-switcher protection. When `protectInAppSwitcher` is true,
 > Android also sets the navigation-bar color to `appSwitcherColor`. Android
 > does not add a branded app-switcher overlay, and it ignores the image name.
+>
+> On Android 12 and later, `FLAG_SECURE` blanks the snapshot that Recents
+> stores for the app. If the user opens Recents directly from the app, the
+> system shows the running app as a live preview until the app leaves the
+> foreground. This preview is the app's own screen, not a captured image, so
+> it can show protected content.
 
 ## Global Protection
 
