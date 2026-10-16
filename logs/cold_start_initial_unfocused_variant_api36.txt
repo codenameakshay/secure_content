@@ -1,0 +1,22 @@
+# Temporary logging build of the reverted variant (windowFocused = decor.hasWindowFocus() at
+# first observation), example with requireBiometricOnResume: false. Three cold starts on sc_api36.
+# The cover is requested before the first focus report, and "Displayed" lands in between, so the
+# first displayed frame is the cover.
+--- run 1
+10-16 23:39:12.643 I/SCMEASURE( 5322): observe attached=false focused=false up=3346248
+10-16 23:39:15.077 I/SCMEASURE( 5322): covered=true up=3348682
+10-16 23:39:15.135 I/ActivityTaskManager(  675): Displayed com.secure_content.example/.MainActivity for user 0: +4s385ms
+10-16 23:39:15.208 I/SCMEASURE( 5322): focus=true up=3348813
+10-16 23:39:15.209 I/SCMEASURE( 5322): covered=false up=3348814
+--- run 2
+10-16 23:39:25.894 I/SCMEASURE( 5384): observe attached=false focused=false up=3359499
+10-16 23:39:28.515 I/SCMEASURE( 5384): covered=true up=3362121
+10-16 23:39:28.620 I/ActivityTaskManager(  675): Displayed com.secure_content.example/.MainActivity for user 0: +5s76ms
+10-16 23:39:28.693 I/SCMEASURE( 5384): focus=true up=3362298
+10-16 23:39:28.694 I/SCMEASURE( 5384): covered=false up=3362299
+--- run 3
+10-16 23:39:38.878 I/SCMEASURE( 5447): observe attached=false focused=false up=3372482
+10-16 23:39:41.901 I/SCMEASURE( 5447): covered=true up=3375506
+10-16 23:39:42.147 I/ActivityTaskManager(  675): Displayed com.secure_content.example/.MainActivity for user 0: +4s882ms
+10-16 23:39:42.194 I/SCMEASURE( 5447): focus=true up=3375799
+10-16 23:39:42.196 I/SCMEASURE( 5447): covered=false up=3375801

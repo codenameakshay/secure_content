@@ -1,0 +1,12 @@
+10-16 23:08:31.602  4078  4078 I SCMEASURE: focus=true up=1505207
+10-16 23:08:31.714  4078  4078 I SCMEASURE: cover removed up=1505319
+10-16 23:08:33.509  1074  1697 D OverviewCommandHelper: command added: CommandInfo(type=TOGGLE, status=IDLE, createTime=1506951, animationCallbacks=null, displayId=0, isLastOfBatch=true)
+10-16 23:08:35.249   928   999 V ShellRecents: RecentsTransitionHandler.startRecentsTransition
+10-16 23:08:36.816  4078  4078 I SCMEASURE: topResumed=false up=1510421
+10-16 23:08:38.157   928   999 V WindowManagerShell: onTransitionReady (#15) android.os.BinderProxy@8eb5d8a: {id=15 t=TO_FRONT f=0x80 trk=0 r=[0@Point(0, 0)] c=[
+10-16 23:08:38.354  1074  1074 D OverviewCommandHelper: recents animation started: CommandInfo(type=TOGGLE, status=PROCESSING, createTime=1506951, animationCallbacks=com.android.quickstep.RecentsAnima
+10-16 23:08:38.358  1074  1074 D OverviewCommandHelper: recents animation started - onInitBackgroundStateUI: CommandInfo(type=TOGGLE, status=PROCESSING, createTime=1506951, animationCallbacks=com.andr
+10-16 23:08:38.663   928   999 V ShellRecents: [91426811] RecentsController.setInputConsumerEnabled: set focus to recents
+10-16 23:08:42.525  4078  4078 I SCMEASURE: focus=false up=1516130
+10-16 23:08:42.650  4078  4078 I SCMEASURE: cover added up=1516255
+10-16 23:08:44.217  4078  4078 I SCMEASURE: cover drawn up=1517822
