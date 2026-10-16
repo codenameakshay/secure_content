@@ -1907,6 +1907,46 @@ void main() {
       await tester.pump();
     }
 
+    for (final lifecycleState in <AppLifecycleState>[
+      AppLifecycleState.paused,
+      AppLifecycleState.hidden,
+      AppLifecycleState.detached,
+    ]) {
+      scopeTestWidgets(
+        'a scope mounted ${lifecycleState.name} activates once',
+        (tester) async {
+          SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+          tester.binding.handleAppLifecycleStateChanged(lifecycleState);
+          await tester.pumpWidget(
+            buildScope(
+              policy: const SecureContentPolicy(requireBiometricOnResume: true),
+              onEvent: recordIdleEvent,
+            ),
+          );
+          tester.binding.scheduleForcedFrame();
+          await tester.idle();
+          await tester.pump();
+          expect(biometricPromptCount, 0);
+          expect(tester.takeException(), isNull);
+          expect(find.text('Session locked'), findsOneWidget);
+          expect(idleEvents, [SecureContentEventType.idleLockActivated]);
+
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          await tester.pump();
+          expect(idleEvents, [SecureContentEventType.idleLockActivated]);
+          expect(find.text('Session locked'), findsOneWidget);
+          expect(biometricPromptCount, 1);
+          await unlockWithBiometrics(tester);
+          expect(idleEvents, [
+            SecureContentEventType.idleLockActivated,
+            SecureContentEventType.idleLockReleased,
+          ]);
+        },
+      );
+    }
+
     scopeTestWidgets('a scope mounted while inactive locks once', (
       tester,
     ) async {
@@ -2043,6 +2083,75 @@ void main() {
           SecureContentEventType.idleLockActivated,
           SecureContentEventType.idleLockReleased,
         ]);
+      },
+    );
+
+    scopeTestWidgets('a retained unlock callback is inert after disposal', (
+      tester,
+    ) async {
+      final serviceEvents = <SecureContentEventType>[];
+      final subscription = SecureContentService.instance.events.listen((event) {
+        if (event.type == SecureContentEventType.idleLockActivated ||
+            event.type == SecureContentEventType.idleLockReleased) {
+          serviceEvents.add(event.type);
+        }
+      });
+      addTearDown(subscription.cancel);
+      VoidCallback? retainedUnlock;
+
+      await tester.pumpWidget(
+        buildScope(
+          policy: const SecureContentPolicy(
+            inactivityTimeout: Duration(milliseconds: 10),
+          ),
+          lockScreenBuilder: (context, onUnlock) {
+            retainedUnlock = onUnlock;
+            return const SizedBox.shrink();
+          },
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(serviceEvents, [SecureContentEventType.idleLockActivated]);
+      expect(retainedUnlock, isNotNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      retainedUnlock!();
+      await tester.pump();
+
+      expect(serviceEvents, [SecureContentEventType.idleLockActivated]);
+    });
+
+    scopeTestWidgets(
+      'a retained biometric unlock callback starts no request after disposal',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        VoidCallback? retainedUnlock;
+        await tester.pumpWidget(
+          buildScope(
+            policy: const SecureContentPolicy(
+              requireBiometricOnResume: true,
+              inactivityTimeout: Duration(milliseconds: 10),
+            ),
+            lockScreenBuilder: (context, onUnlock) {
+              retainedUnlock = onUnlock;
+              return const SizedBox.shrink();
+            },
+          ),
+        );
+        await tester.pump();
+        expect(biometricPromptCount, 1);
+
+        await unlockWithBiometrics(tester);
+        await tester.pump(const Duration(milliseconds: 20));
+        expect(retainedUnlock, isNotNull);
+        expect(biometricPromptCount, 1);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        retainedUnlock!();
+        await tester.pump();
+
+        expect(biometricPromptCount, 1);
+        expect(SecureContentService.instance.pendingBiometricRequest, isNull);
       },
     );
   });

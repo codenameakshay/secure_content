@@ -145,7 +145,6 @@ class _SecureContentScopeState extends State<SecureContentScope>
       // content is never rendered even for a single frame (AUTH-02).
       _isLocked = true;
       _isBiometricLocked = true;
-      // Pair the initial lock with the idleLockReleased of the first unlock.
       _service.emitLocalEvent(SecureContentEventType.idleLockActivated);
       if (_appLifecycleState == AppLifecycleState.resumed) {
         _isAuthenticating = true;
@@ -533,9 +532,6 @@ class _SecureContentScopeState extends State<SecureContentScope>
     _restartIdleTimer();
   }
 
-  /// Emits one idle-lock event for each lock state change. A lock that is
-  /// already in place, such as an idle deadline that passes during a
-  /// biometric prompt, emits nothing.
   void _setLocked(bool locked) {
     if (_isLocked == locked) {
       return;
@@ -792,6 +788,9 @@ class _SecureContentScopeState extends State<SecureContentScope>
   }
 
   void _handleUnlock() {
+    if (!mounted || !widget.enabled) {
+      return;
+    }
     if (widget.policy.requireBiometricOnResume) {
       _lockAndRequestBiometric();
     } else {
