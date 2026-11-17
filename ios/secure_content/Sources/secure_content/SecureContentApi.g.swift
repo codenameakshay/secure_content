@@ -188,6 +188,26 @@ private func nilOrValue<T>(_ value: Any?) -> T? {
 }
 
 
+/// Outcome of [SecureContentHostApi.authenticate].
+enum AuthStatus: Int, CaseIterable {
+  case success = 0
+  case failed = 1
+  case canceled = 2
+  case timeout = 3
+  case temporaryLockout = 4
+  case permanentLockout = 5
+  case notEnrolled = 6
+  case notAvailable = 7
+  case error = 8
+}
+
+enum BiometryType: Int, CaseIterable {
+  case face = 0
+  case fingerprint = 1
+  case iris = 2
+  case unknown = 3
+}
+
 /// Generated class from Pigeon that represents data sent in messages.
 struct ProtectionConfig: Hashable, CustomStringConvertible {
   var enabled: Bool
@@ -286,13 +306,116 @@ struct SecureEvent: Hashable, CustomStringConvertible {
   }
 }
 
+/// Generated class from Pigeon that represents data sent in messages.
+struct AuthResult: Hashable, CustomStringConvertible {
+  var status: AuthStatus
+  var message: String? = nil
+  /// True when the system closed the prompt because the app lost the
+  /// foreground, not because the person canceled it.
+  var interrupted: Bool? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> AuthResult? {
+    let status = pigeonVar_list[0] as! AuthStatus
+    let message: String? = nilOrValue(pigeonVar_list[1])
+    let interrupted: Bool? = nilOrValue(pigeonVar_list[2])
+
+    return AuthResult(
+      status: status,
+      message: message,
+      interrupted: interrupted
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      status,
+      message,
+      interrupted,
+    ]
+  }
+  static func == (lhs: AuthResult, rhs: AuthResult) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return SecureContentApiPigeonInternal.deepEquals(lhs.status, rhs.status) && SecureContentApiPigeonInternal.deepEquals(lhs.message, rhs.message) && SecureContentApiPigeonInternal.deepEquals(lhs.interrupted, rhs.interrupted)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("AuthResult")
+    SecureContentApiPigeonInternal.deepHash(value: status, hasher: &hasher)
+    SecureContentApiPigeonInternal.deepHash(value: message, hasher: &hasher)
+    SecureContentApiPigeonInternal.deepHash(value: interrupted, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "AuthResult(status: \(String(describing: status)), message: \(String(describing: message)), interrupted: \(String(describing: interrupted)))"
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct BiometricCapability: Hashable, CustomStringConvertible {
+  var isAvailable: Bool
+  var types: [BiometryType]
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> BiometricCapability? {
+    let isAvailable = pigeonVar_list[0] as! Bool
+    let types = pigeonVar_list[1] as! [BiometryType]
+
+    return BiometricCapability(
+      isAvailable: isAvailable,
+      types: types
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      isAvailable,
+      types,
+    ]
+  }
+  static func == (lhs: BiometricCapability, rhs: BiometricCapability) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return SecureContentApiPigeonInternal.deepEquals(lhs.isAvailable, rhs.isAvailable) && SecureContentApiPigeonInternal.deepEquals(lhs.types, rhs.types)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("BiometricCapability")
+    SecureContentApiPigeonInternal.deepHash(value: isAvailable, hasher: &hasher)
+    SecureContentApiPigeonInternal.deepHash(value: types, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "BiometricCapability(isAvailable: \(String(describing: isAvailable)), types: \(String(describing: types)))"
+  }
+}
+
 private class SecureContentApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
     case 129:
-      return ProtectionConfig.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return AuthStatus(rawValue: enumResultAsInt)
+      }
+      return nil
     case 130:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return BiometryType(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 131:
+      return ProtectionConfig.fromList(self.readValue() as! [Any?])
+    case 132:
       return SecureEvent.fromList(self.readValue() as! [Any?])
+    case 133:
+      return AuthResult.fromList(self.readValue() as! [Any?])
+    case 134:
+      return BiometricCapability.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -301,11 +424,23 @@ private class SecureContentApiPigeonCodecReader: FlutterStandardReader {
 
 private class SecureContentApiPigeonCodecWriter: FlutterStandardWriter {
   override func writeValue(_ value: Any) {
-    if let value = value as? ProtectionConfig {
+    if let value = value as? AuthStatus {
       super.writeByte(129)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? BiometryType {
+      super.writeByte(130)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? ProtectionConfig {
+      super.writeByte(131)
       super.writeValue(value.toList())
     } else if let value = value as? SecureEvent {
-      super.writeByte(130)
+      super.writeByte(132)
+      super.writeValue(value.toList())
+    } else if let value = value as? AuthResult {
+      super.writeByte(133)
+      super.writeValue(value.toList())
+    } else if let value = value as? BiometricCapability {
+      super.writeByte(134)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -327,11 +462,15 @@ class SecureContentApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Senda
   static let shared = SecureContentApiPigeonCodec(readerWriter: SecureContentApiPigeonCodecReaderWriter())
 }
 
+
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol SecureContentHostApi {
   func configureProtection(config: ProtectionConfig) throws
   func isScreenCaptured() throws -> Bool
   func requestBiometricAuth(reason: String) throws
+  /// Replies with the outcome of this one prompt. Emits no biometric events.
+  func authenticate(reason: String, biometricOnly: Bool, completion: @escaping (Result<AuthResult, Error>) -> Void)
+  func getBiometricCapability() throws -> BiometricCapability
   func checkIntegrity() throws
   func setSensitiveClipboard(content: String, clearAfterMs: Int64) throws
   func clearSensitiveClipboard() throws
@@ -385,6 +524,38 @@ class SecureContentHostApiSetup {
       }
     } else {
       requestBiometricAuthChannel.setMessageHandler(nil)
+    }
+    /// Replies with the outcome of this one prompt. Emits no biometric events.
+    let authenticateChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.secure_content.SecureContentHostApi.authenticate\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      authenticateChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let reasonArg = args[0] as! String
+        let biometricOnlyArg = args[1] as! Bool
+        api.authenticate(reason: reasonArg, biometricOnly: biometricOnlyArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      authenticateChannel.setMessageHandler(nil)
+    }
+    let getBiometricCapabilityChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.secure_content.SecureContentHostApi.getBiometricCapability\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      getBiometricCapabilityChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.getBiometricCapability()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      getBiometricCapabilityChannel.setMessageHandler(nil)
     }
     let checkIntegrityChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.secure_content.SecureContentHostApi.checkIntegrity\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

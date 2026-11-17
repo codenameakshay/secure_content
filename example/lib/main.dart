@@ -38,11 +38,41 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _useCustomHardBlock = false;
   int _counter = 0;
   String _lastEvent = 'No events yet';
+  String _unlockResult = 'Not tried yet';
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Biometrics only: the prompt never offers the device passcode or PIN.
+  Future<void> _biometricOnlyUnlock() async {
+    final capability = await SecureContent.getBiometricCapability();
+    if (!mounted) return;
+    if (!capability.isAvailable) {
+      setState(() => _unlockResult = 'No biometric enrolled');
+      return;
+    }
+    final label = switch (capability.types.firstOrNull) {
+      SecureContentBiometryType.face => 'face',
+      SecureContentBiometryType.fingerprint => 'fingerprint',
+      SecureContentBiometryType.iris => 'iris',
+      _ => 'biometrics',
+    };
+    final result = await SecureContent.authenticate(
+      reason: 'Unlock with your $label',
+      biometricOnly: true,
+      persistAcrossBackgrounding: true,
+    );
+    if (mounted) {
+      setState(() {
+        final message = result.message;
+        _unlockResult = message == null
+            ? '${result.status.name} ($label)'
+            : '${result.status.name} ($label): $message';
+      });
+    }
   }
 
   Future<void> _toggleGlobalProtection() async {
@@ -182,6 +212,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: const Text('Request biometric auth'),
                 ),
                 ElevatedButton(
+                  onPressed: _biometricOnlyUnlock,
+                  child: const Text('Biometric-only unlock'),
+                ),
+                ElevatedButton(
                   onPressed: () {
                     SecureContent.checkIntegrity();
                   },
@@ -303,6 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             Text('Last secure event: $_lastEvent'),
+            Text('Biometric-only unlock: $_unlockResult'),
             const SizedBox(height: 4),
             const Text(
               'Tip: Android screenshot callback requires Android 14+.',

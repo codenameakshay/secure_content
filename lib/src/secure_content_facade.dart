@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'secure_content_auth.dart';
 import 'secure_content_controller.dart';
 import 'secure_content_event.dart';
 import 'secure_content_service.dart';
@@ -33,6 +34,47 @@ class SecureContent {
     return _service.isScreenCaptured();
   }
 
+  /// Shows one authentication prompt and returns its outcome.
+  ///
+  /// With [biometricOnly], the prompt accepts only a biometric (Face ID,
+  /// Touch ID, or an Android class 2 or 3 biometric) and never offers the
+  /// device passcode, PIN, or pattern. By default the device credential is
+  /// also accepted where supported. On Android, credentials are supported
+  /// with a `FragmentActivity` on API 30+ or a plain Activity on API 29+;
+  /// lower Android versions retain the legacy biometric-only behavior.
+  ///
+  /// With [persistAcrossBackgrounding], a prompt that the system closes
+  /// because the app lost the foreground (the person switched apps, or a call
+  /// or Control Center covered it) opens again when the app is resumed, and
+  /// the returned future completes with that prompt's result. Without it, such
+  /// a prompt returns [SecureContentAuthStatus.canceled]. A cancel by the
+  /// person always returns [SecureContentAuthStatus.canceled].
+  ///
+  /// Calls share one prompt while it is up, unless their options differ.
+  /// This prompt emits no biometric events on [events].
+  static Future<SecureContentAuthResult> authenticate({
+    required String reason,
+    bool biometricOnly = false,
+    bool persistAcrossBackgrounding = false,
+  }) {
+    return _service.authenticate(
+      reason,
+      biometricOnly: biometricOnly,
+      persistAcrossBackgrounding: persistAcrossBackgrounding,
+    );
+  }
+
+  /// Whether biometrics are enrolled, and which sensors the device has.
+  static Future<SecureContentBiometricCapability> getBiometricCapability() {
+    return _service.getBiometricCapability();
+  }
+
+  /// Shows a prompt that accepts a biometric or, where supported, the device
+  /// credential, and reports the outcome only as a biometric event on
+  /// [events]. On Android, credentials are supported with a `FragmentActivity`
+  /// on API 30+ or a plain Activity on API 29+; lower versions retain the
+  /// legacy biometric-only behavior. Use
+  /// [authenticate] to get the outcome directly.
   static Future<void> requestBiometricAuth({
     String reason = 'Authenticate to continue',
   }) {

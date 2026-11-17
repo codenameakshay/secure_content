@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'secure_content_auth.dart';
 import 'secure_content_event.dart';
+import 'pigeon/secure_content_api.g.dart' as pigeon;
 import 'secure_content_platform.dart';
 
 class SecureContentService {
@@ -36,6 +38,12 @@ class SecureContentService {
   Completer<SecureContentEventType>? _biometricRequest;
   StreamSubscription<SecureContentEvent>? _biometricResultSubscription;
 
+  Future<SecureContentAuthResult>? _authRequest;
+  ({bool biometricOnly, bool persist})? _authRequestKey;
+  Completer<pigeon.AuthResult>? _authCancellation;
+  AppLifecycleListener? _authLifecycleListener;
+  bool _isDisposed = false;
+
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
   Future<SecureContentEventType>? get pendingBiometricRequest =>
@@ -53,6 +61,7 @@ class SecureContentService {
   /// [SecureContentService] consumer and a biometric outcome on it may belong
   /// to a request some other, unrelated caller made.
   Future<SecureContentEventType> requestBiometricAuth(String reason) async {
+    if (_isDisposed) return SecureContentEventType.biometricAuthFailed;
     if (!_platform.isSupportedPlatform) {
       return SecureContentEventType.biometricUnavailable;
     }
@@ -64,6 +73,23 @@ class SecureContentService {
 
     final completer = Completer<SecureContentEventType>();
     _biometricRequest = completer;
+    // An [authenticate] prompt is up: wait for it, then open our own. Its
+    // result answers a different question, and reusing a prompt that began
+    // earlier would skip the fresh result a resume needs.
+    final auth = _authRequest;
+    if (auth == null) {
+      _startBiometricRequest(reason, completer);
+    } else {
+      unawaited(auth.then((_) => _startBiometricRequest(reason, completer)));
+    }
+    return completer.future;
+  }
+
+  void _startBiometricRequest(
+    String reason,
+    Completer<SecureContentEventType> completer,
+  ) {
+    if (!identical(_biometricRequest, completer)) return;
     _biometricResultSubscription = _eventsController.stream.listen((event) {
       switch (event.type) {
         case SecureContentEventType.biometricAuthSucceeded:
@@ -86,8 +112,121 @@ class SecureContentService {
         }
       }),
     );
+  }
 
-    return completer.future;
+  /// Shows one authentication prompt and returns its outcome.
+  ///
+  /// With [biometricOnly], the prompt accepts only a biometric and never
+  /// offers the device passcode, PIN, or pattern.
+  ///
+  /// With [persistAcrossBackgrounding], a prompt that the system closes
+  /// because the app lost the foreground opens again when the app is resumed,
+  /// and this call returns that prompt's result.
+  ///
+  /// One prompt runs at a time. A call made while a prompt with the same
+  /// options is up shares that prompt and its result. Any other call waits
+  /// until the current prompt closes, then opens its own, so a prompt that
+  /// accepts the passcode never answers a biometric-only call.
+  Future<SecureContentAuthResult> authenticate(
+    String reason, {
+    bool biometricOnly = false,
+    bool persistAcrossBackgrounding = false,
+  }) async {
+    if (!_platform.isSupportedPlatform) {
+      return const SecureContentAuthResult(
+        SecureContentAuthStatus.notAvailable,
+      );
+    }
+    final key = (
+      biometricOnly: biometricOnly,
+      persist: persistAcrossBackgrounding,
+    );
+    while (true) {
+      if (_isDisposed) {
+        return const SecureContentAuthResult(SecureContentAuthStatus.canceled);
+      }
+      final auth = _authRequest;
+      if (auth != null && _authRequestKey == key) {
+        return auth;
+      }
+      // Neither future completes with an error.
+      final busy = auth ?? _biometricRequest?.future;
+      if (busy == null) break;
+      await busy;
+    }
+
+    final request = _prompt(reason, key);
+    _authRequest = request;
+    _authRequestKey = key;
+    unawaited(
+      request.whenComplete(() {
+        if (identical(_authRequest, request)) _authRequest = null;
+      }),
+    );
+    return request;
+  }
+
+  Future<SecureContentAuthResult> _prompt(
+    String reason,
+    ({bool biometricOnly, bool persist}) key,
+  ) async {
+    final cancellation = Completer<pigeon.AuthResult>();
+    _authCancellation = cancellation;
+    var nextResume = Completer<void>();
+    if (key.persist) {
+      _authLifecycleListener = AppLifecycleListener(
+        onResume: () {
+          final resumed = nextResume;
+          nextResume = Completer<void>();
+          resumed.complete();
+        },
+      );
+    }
+    try {
+      while (!_isDisposed) {
+        final resumeAfterPrompt = nextResume.future;
+        final reply = await Future.any<pigeon.AuthResult>([
+          _platform.authenticate(reason, biometricOnly: key.biometricOnly),
+          cancellation.future,
+        ]);
+        if (!key.persist || reply.interrupted != true) {
+          return SecureContentAuthResult.fromPigeon(reply);
+        }
+        await Future.any<Object?>([resumeAfterPrompt, cancellation.future]);
+        while (!_isDisposed &&
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed) {
+          await Future.any<Object?>([nextResume.future, cancellation.future]);
+        }
+      }
+      return const SecureContentAuthResult(SecureContentAuthStatus.canceled);
+    } catch (error) {
+      return SecureContentAuthResult(
+        SecureContentAuthStatus.error,
+        message: '$error',
+      );
+    } finally {
+      _authLifecycleListener?.dispose();
+      _authLifecycleListener = null;
+      _authCancellation = null;
+      if (!cancellation.isCompleted) {
+        cancellation.complete(
+          pigeon.AuthResult(status: pigeon.AuthStatus.canceled),
+        );
+      }
+    }
+  }
+
+  Future<SecureContentBiometricCapability> getBiometricCapability() async {
+    if (!_platform.isSupportedPlatform) {
+      return const SecureContentBiometricCapability(
+        isAvailable: false,
+        types: <SecureContentBiometryType>[],
+      );
+    }
+    return SecureContentBiometricCapability.fromPigeon(
+      await _platform.getBiometricCapability(),
+    );
   }
 
   void _completeBiometricRequest(SecureContentEventType outcome) {
@@ -224,6 +363,14 @@ class SecureContentService {
   }
 
   void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    _authLifecycleListener?.dispose();
+    _authLifecycleListener = null;
+    _authCancellation?.complete(
+      pigeon.AuthResult(status: pigeon.AuthStatus.canceled),
+    );
+    _completeBiometricRequest(SecureContentEventType.biometricAuthFailed);
     _eventSubscription?.cancel();
     unawaited(_biometricResultSubscription?.cancel());
     _eventsController.close();

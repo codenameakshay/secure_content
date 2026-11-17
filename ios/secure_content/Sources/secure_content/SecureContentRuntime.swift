@@ -46,6 +46,12 @@ final class SecureContentRuntime: NSObject {
     authentication.request(reason: reason) { [weak self] event in self?.emit(event) }
   }
 
+  func authenticate(
+    reason: String, biometricOnly: Bool, reply: @escaping @MainActor (AuthResult) -> Void
+  ) {
+    authentication.authenticate(reason: reason, biometricOnly: biometricOnly, reply: reply)
+  }
+
   func checkIntegrity() {
     emit(SecureContentIntegrity.riskDetected ? .integrityRiskDetected : .integritySafe)
   }

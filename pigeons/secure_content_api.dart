@@ -39,6 +39,39 @@ class SecureEvent {
   final String? timestamp;
 }
 
+/// Outcome of [SecureContentHostApi.authenticate].
+enum AuthStatus {
+  success,
+  failed,
+  canceled,
+  timeout,
+  temporaryLockout,
+  permanentLockout,
+  notEnrolled,
+  notAvailable,
+  error,
+}
+
+class AuthResult {
+  AuthResult({required this.status, this.message, this.interrupted});
+
+  final AuthStatus status;
+  final String? message;
+
+  /// True when the system closed the prompt because the app lost the
+  /// foreground, not because the person canceled it.
+  final bool? interrupted;
+}
+
+enum BiometryType { face, fingerprint, iris, unknown }
+
+class BiometricCapability {
+  BiometricCapability({required this.isAvailable, required this.types});
+
+  final bool isAvailable;
+  final List<BiometryType> types;
+}
+
 @HostApi()
 abstract class SecureContentHostApi {
   void configureProtection(ProtectionConfig config);
@@ -46,6 +79,12 @@ abstract class SecureContentHostApi {
   bool isScreenCaptured();
 
   void requestBiometricAuth(String reason);
+
+  /// Replies with the outcome of this one prompt. Emits no biometric events.
+  @asyncCallback
+  AuthResult authenticate(String reason, bool biometricOnly);
+
+  BiometricCapability getBiometricCapability();
 
   void checkIntegrity();
 

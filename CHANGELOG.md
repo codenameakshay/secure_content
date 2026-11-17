@@ -1,5 +1,10 @@
-## Unreleased
+## 3.1.0
 
+- Add `SecureContent.authenticate({required String reason, bool biometricOnly = false})`. It returns a `SecureContentAuthResult` with a `SecureContentAuthStatus`: `success`, `failed`, `canceled`, `timeout`, `temporaryLockout`, `permanentLockout`, `notEnrolled`, `notAvailable`, or `error`. See [Authentication](README.md#authentication).
+- Add biometric-only authentication. With `biometricOnly: true`, iOS uses `.deviceOwnerAuthenticationWithBiometrics` and hides the passcode fallback button. Android allows `BIOMETRIC_WEAK` without `DEVICE_CREDENTIAL` and shows a Cancel button. The default stays `false`, so existing calls do not change.
+- Add `persistAcrossBackgrounding` to `authenticate`. When the system closes the prompt because the app lost the foreground, the prompt opens again when the app is resumed, as in `local_auth`.
+- Add `SecureContent.getBiometricCapability()`. It reports whether a biometric is enrolled and which sensors the device has (`face`, `fingerprint`, `iris`, or `unknown`).
+- `authenticate` and `requestBiometricAuth` share one prompt at a time. A call never joins a prompt with different options; it waits, then opens its own.
 - Emit `idleLockActivated` and `idleLockReleased` once for each lock change. Resuming after the idle deadline, or reaching it while already locked, no longer repeats `idleLockActivated`. A scope that starts locked now emits `idleLockActivated`, and disabling a locked scope emits `idleLockReleased`.
 - Keep the normal lock screen when an Android activity is recreated during a biometric prompt, instead of reporting that biometrics are unavailable. A draining cancellation returns `biometricAuthFailed` only if the current host and authenticators are usable. Unavailable hosts or authenticators still return `biometricUnavailable`.
 - Ignore stale custom unlock callbacks after scope disposal, preventing phantom idle-lock releases and new biometric prompts.

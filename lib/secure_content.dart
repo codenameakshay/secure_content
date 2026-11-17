@@ -1,3 +1,4 @@
+export 'src/secure_content_auth.dart';
 export 'src/secure_content_controller.dart';
 export 'src/secure_content_event.dart';
 export 'src/secure_content_facade.dart';

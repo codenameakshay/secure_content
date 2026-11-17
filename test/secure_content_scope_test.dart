@@ -1210,6 +1210,80 @@ void main() {
     );
 
     scopeTestWidgets(
+      'a persistent authenticate result cannot replace fresh scope resume auth',
+      (tester) async {
+        SecureContentPlatform.debugIsSupportedPlatformOverride = true;
+        final authCodec = pigeon.SecureContentHostApi.pigeonChannelCodec;
+        final messenger = tester.binding.defaultBinaryMessenger;
+        final replies = <Completer<ByteData?>>[];
+        messenger.setMockMessageHandler('$channelPrefix.authenticate', (_) {
+          final reply = Completer<ByteData?>();
+          replies.add(reply);
+          return reply.future;
+        });
+        addTearDown(
+          () => messenger.setMockMessageHandler(
+            '$channelPrefix.authenticate',
+            null,
+          ),
+        );
+        const policy = SecureContentPolicy(requireBiometricOnResume: true);
+        await tester.pumpWidget(buildScope(policy: policy));
+        await tester.pump();
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        final auth = SecureContent.authenticate(
+          reason: 'r',
+          persistAcrossBackgrounding: true,
+        );
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        replies.single.complete(
+          authCodec.encodeMessage(<Object?>[
+            pigeon.AuthResult(
+              status: pigeon.AuthStatus.canceled,
+              interrupted: true,
+            ),
+          ]),
+        );
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        expect(replies, hasLength(2));
+        replies.last.complete(
+          authCodec.encodeMessage(<Object?>[
+            pigeon.AuthResult(status: pigeon.AuthStatus.success),
+          ]),
+        );
+        await tester.pump();
+        expect((await auth).isSuccess, isTrue);
+        await tester.pump();
+        expect(find.text('Session locked'), findsOneWidget);
+        expect(biometricPromptCount, 2);
+        SecureContentService.instance.emitLocalEvent(
+          SecureContentEventType.biometricAuthSucceeded,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Session locked'), findsNothing);
+        expect(find.text('protected'), findsOneWidget);
+      },
+    );
+
+    scopeTestWidgets(
       'a global request started before background cannot unlock after resume',
       (tester) async {
         SecureContentPlatform.debugIsSupportedPlatformOverride = true;

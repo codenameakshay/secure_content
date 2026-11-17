@@ -111,6 +111,21 @@ int _deepHash(Object? value) {
   return value.hashCode;
 }
 
+/// Outcome of [SecureContentHostApi.authenticate].
+enum AuthStatus {
+  success,
+  failed,
+  canceled,
+  timeout,
+  temporaryLockout,
+  permanentLockout,
+  notEnrolled,
+  notAvailable,
+  error,
+}
+
+enum BiometryType { face, fingerprint, iris, unknown }
+
 class ProtectionConfig {
   ProtectionConfig({
     required this.enabled,
@@ -228,6 +243,104 @@ class SecureEvent {
   }
 }
 
+class AuthResult {
+  AuthResult({required this.status, this.message, this.interrupted});
+
+  AuthStatus status;
+
+  String? message;
+
+  /// True when the system closed the prompt because the app lost the
+  /// foreground, not because the person canceled it.
+  bool? interrupted;
+
+  List<Object?> _toList() {
+    return <Object?>[status, message, interrupted];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static AuthResult decode(Object result) {
+    result as List<Object?>;
+    return AuthResult(
+      status: result[0]! as AuthStatus,
+      message: result[1] as String?,
+      interrupted: result[2] as bool?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! AuthResult || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(status, other.status) &&
+        _deepEquals(message, other.message) &&
+        _deepEquals(interrupted, other.interrupted);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'AuthResult(status: $status, message: $message, interrupted: $interrupted)';
+  }
+}
+
+class BiometricCapability {
+  BiometricCapability({required this.isAvailable, required this.types});
+
+  bool isAvailable;
+
+  List<BiometryType> types;
+
+  List<Object?> _toList() {
+    return <Object?>[isAvailable, types];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static BiometricCapability decode(Object result) {
+    result as List<Object?>;
+    return BiometricCapability(
+      isAvailable: result[0]! as bool,
+      types: (result[1]! as List<Object?>).cast<BiometryType>(),
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BiometricCapability || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(isAvailable, other.isAvailable) &&
+        _deepEquals(types, other.types);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BiometricCapability(isAvailable: $isAvailable, types: $types)';
+  }
+}
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -235,11 +348,23 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    } else if (value is ProtectionConfig) {
+    } else if (value is AuthStatus) {
       buffer.putUint8(129);
+      writeValue(buffer, value.index);
+    } else if (value is BiometryType) {
+      buffer.putUint8(130);
+      writeValue(buffer, value.index);
+    } else if (value is ProtectionConfig) {
+      buffer.putUint8(131);
       writeValue(buffer, value.encode());
     } else if (value is SecureEvent) {
-      buffer.putUint8(130);
+      buffer.putUint8(132);
+      writeValue(buffer, value.encode());
+    } else if (value is AuthResult) {
+      buffer.putUint8(133);
+      writeValue(buffer, value.encode());
+    } else if (value is BiometricCapability) {
+      buffer.putUint8(134);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -250,9 +375,19 @@ class _PigeonCodec extends StandardMessageCodec {
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
       case 129:
-        return ProtectionConfig.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : AuthStatus.values[value];
       case 130:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : BiometryType.values[value];
+      case 131:
+        return ProtectionConfig.decode(readValue(buffer)!);
+      case 132:
         return SecureEvent.decode(readValue(buffer)!);
+      case 133:
+        return AuthResult.decode(readValue(buffer)!);
+      case 134:
+        return BiometricCapability.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -333,6 +468,47 @@ class SecureContentHostApi {
       pigeonVar_channelName,
       isNullValid: true,
     );
+  }
+
+  /// Replies with the outcome of this one prompt. Emits no biometric events.
+  Future<AuthResult> authenticate(String reason, bool biometricOnly) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.secure_content.SecureContentHostApi.authenticate$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[reason, biometricOnly],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as AuthResult;
+  }
+
+  Future<BiometricCapability> getBiometricCapability() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.secure_content.SecureContentHostApi.getBiometricCapability$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as BiometricCapability;
   }
 
   Future<void> checkIntegrity() async {
