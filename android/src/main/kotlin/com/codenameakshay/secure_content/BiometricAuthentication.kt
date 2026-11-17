@@ -46,6 +46,12 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     private var foregroundLifecycle: Lifecycle? = null
     private val foregroundObserver = LifecycleEventObserver { _, event ->
         if (event == Lifecycle.Event.ON_PAUSE) hostLeftForeground = true
+        if (event == Lifecycle.Event.ON_STOP && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ownedActivity?.isChangingConfigurations == false
+        ) {
+            // Biometric 1.4 no longer cancels the compatibility prompt when its host stops.
+            androidXPrompt?.cancelAuthentication()
+        }
     }
     private val mainHandler = Handler(Looper.getMainLooper())
 

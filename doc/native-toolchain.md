@@ -1,7 +1,7 @@
 # Native toolchain
 
-Verified against primary release metadata on 2026-10-06. Versions are pinned
-to a supported combination rather than mixed independently.
+The table lists the selected versions and the release metadata reviewed for
+this dependency update. The dated local verification below predates 3.1.1.
 
 | Component | Selected | Current stable | Reason |
 | --- | --- | --- | --- |
@@ -36,6 +36,13 @@ against this exact combination. The newer AGP 9.4 minor is outside that range.
 Consuming Android apps must use compile SDK 37 or newer and AGP 9.2 or newer,
 which supports API 37.0. This does not raise the plugin's Android minimum SDK or change
 the example's Flutter-managed target SDK.
+
+Biometric 1.4.0-alpha07 declares compile SDK 36.1 and AGP 8.9.1 in its AAR
+metadata, both below the existing host requirements. Its dependency metadata
+requests Kotlin stdlib 2.1.20, as Fragment 1.9.1 already did before this update.
+Hosts using the required AGP 9.2 built-in Kotlin support meet that metadata
+requirement. Hosts using older Kotlin compilers can fail metadata checks even
+if they raise compile SDK alone. Do not force an older stdlib to hide the error.
 
 Core 1.18.0 and 1.19.1 retain the `FingerprintManagerCompat` class but replace
 its hardware/enrollment checks with constant `false` and its authentication
@@ -121,6 +128,9 @@ Sources:
 - [Gradle 9.7.0 checksum](https://services.gradle.org/distributions/gradle-9.7.0-bin.zip.sha256)
 - [Gradle Java compatibility](https://docs.gradle.org/9.7.0/userguide/compatibility.html)
 - [Temurin JDK 25 release metadata](https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=aarch64&image_type=jdk&os=linux)
+- [Biometric 1.4.0-alpha07 dependency metadata](https://dl.google.com/dl/android/maven2/androidx/biometric/biometric/1.4.0-alpha07/biometric-1.4.0-alpha07.module)
+- [Biometric 1.4.0-alpha07 AAR](https://dl.google.com/dl/android/maven2/androidx/biometric/biometric/1.4.0-alpha07/biometric-1.4.0-alpha07.aar)
+- [Fragment 1.9.1 dependency metadata](https://dl.google.com/dl/android/maven2/androidx/fragment/fragment/1.9.1/fragment-1.9.1.module)
 - [AndroidX Biometric release metadata](https://dl.google.com/dl/android/maven2/androidx/biometric/biometric/maven-metadata.xml)
 - [AndroidX AppCompat release metadata](https://dl.google.com/dl/android/maven2/androidx/appcompat/appcompat/maven-metadata.xml)
 - [AppCompat 1.8.0 dependency metadata](https://dl.google.com/dl/android/maven2/androidx/appcompat/appcompat/1.8.0/appcompat-1.8.0.module)

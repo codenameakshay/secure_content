@@ -1116,6 +1116,42 @@ class SecureContentPluginLifecycleTest {
 
     @Test
     @Config(sdk = [23, 27])
+    fun stoppingFingerprintHostCancelsTheSensorAndReportsAnInterruptionAfterResume() {
+        configureFingerprint()
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java)
+        controller.get().setTheme(androidx.appcompat.R.style.Theme_AppCompat_DayNight_NoActionBar)
+        plugin.onAttachedToActivity(activityBinding(controller.setup().get()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idle()
+        // FingerprintManager is not in the API 37 stubs, so the callback is driven reflectively.
+        val callback = ReflectionHelpers.getStaticField<Any>(ShadowFingerprintManager::class.java, "pendingCallback")
+        assertNotNull(callback)
+
+        controller.pause()
+        assertSame(callback, ReflectionHelpers.getStaticField<Any>(ShadowFingerprintManager::class.java, "pendingCallback"))
+        controller.stop()
+        assertNull(ReflectionHelpers.getStaticField<Any>(ShadowFingerprintManager::class.java, "pendingCallback"))
+        // The shadow clears the sensor request on cancel but does not send the platform callback.
+        ReflectionHelpers.callInstanceMethod<Unit>(
+            callback,
+            "onAuthenticationError",
+            ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType, AndroidXBiometricPrompt.ERROR_CANCELED),
+            ReflectionHelpers.ClassParameter.from(CharSequence::class.java, "Canceled"),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(results.isEmpty())
+
+        controller.start().resume()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true)), results)
+        assertNull(ownershipKey(plugin))
+        plugin.onDetachedFromEngine(binding)
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    @Config(sdk = [23, 27])
     fun nonAppCompatFingerprintHostReturnsUnavailableWithoutCrashingTheMainQueue() {
         configureFingerprint()
         val activityController = Robolectric.buildActivity(FragmentActivity::class.java)
