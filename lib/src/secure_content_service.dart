@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'secure_content_auth.dart';
 import 'secure_content_event.dart';
 import 'secure_content_platform.dart';
 
@@ -36,6 +37,9 @@ class SecureContentService {
   Completer<SecureContentEventType>? _biometricRequest;
   StreamSubscription<SecureContentEvent>? _biometricResultSubscription;
 
+  Future<SecureContentAuthResult>? _authRequest;
+  bool _authRequestBiometricOnly = false;
+
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
   Future<SecureContentEventType>? get pendingBiometricRequest =>
@@ -64,6 +68,22 @@ class SecureContentService {
 
     final completer = Completer<SecureContentEventType>();
     _biometricRequest = completer;
+    // An [authenticate] prompt is up: wait for it, then open our own. Its
+    // result answers a different question, and reusing a prompt that began
+    // earlier would skip the fresh result a resume needs.
+    final auth = _authRequest;
+    if (auth == null) {
+      _startBiometricRequest(reason, completer);
+    } else {
+      unawaited(auth.then((_) => _startBiometricRequest(reason, completer)));
+    }
+    return completer.future;
+  }
+
+  void _startBiometricRequest(
+    String reason,
+    Completer<SecureContentEventType> completer,
+  ) {
     _biometricResultSubscription = _eventsController.stream.listen((event) {
       switch (event.type) {
         case SecureContentEventType.biometricAuthSucceeded:
@@ -86,8 +106,66 @@ class SecureContentService {
         }
       }),
     );
+  }
 
-    return completer.future;
+  /// Shows one authentication prompt and returns its outcome.
+  ///
+  /// With [biometricOnly], the prompt accepts only a biometric and never
+  /// offers the device passcode, PIN, or pattern.
+  ///
+  /// One prompt runs at a time. A call made while a prompt with the same
+  /// [biometricOnly] value is up shares that prompt and its result. Any other
+  /// call waits until the current prompt closes, then opens its own, so a
+  /// prompt that accepts the passcode never answers a biometric-only call.
+  Future<SecureContentAuthResult> authenticate(
+    String reason, {
+    bool biometricOnly = false,
+  }) async {
+    if (!_platform.isSupportedPlatform) {
+      return const SecureContentAuthResult(
+        SecureContentAuthStatus.notAvailable,
+      );
+    }
+    while (true) {
+      final auth = _authRequest;
+      if (auth != null && _authRequestBiometricOnly == biometricOnly) {
+        return auth;
+      }
+      // Neither future completes with an error.
+      final busy = auth ?? _biometricRequest?.future;
+      if (busy == null) break;
+      await busy;
+    }
+
+    final request = _platform
+        .authenticate(reason, biometricOnly: biometricOnly)
+        .then(
+          SecureContentAuthResult.fromPigeon,
+          onError: (Object error) => SecureContentAuthResult(
+            SecureContentAuthStatus.error,
+            message: '$error',
+          ),
+        );
+    _authRequest = request;
+    _authRequestBiometricOnly = biometricOnly;
+    unawaited(
+      request.whenComplete(() {
+        if (identical(_authRequest, request)) _authRequest = null;
+      }),
+    );
+    return request;
+  }
+
+  Future<SecureContentBiometricCapability> getBiometricCapability() async {
+    if (!_platform.isSupportedPlatform) {
+      return const SecureContentBiometricCapability(
+        isAvailable: false,
+        types: <SecureContentBiometryType>[],
+      );
+    }
+    return SecureContentBiometricCapability.fromPigeon(
+      await _platform.getBiometricCapability(),
+    );
   }
 
   void _completeBiometricRequest(SecureContentEventType outcome) {

@@ -1,6 +1,7 @@
 package com.codenameakshay.secure_content
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.Color
 import android.os.Build
 import android.os.Handler
@@ -9,6 +10,8 @@ import android.view.View
 import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import androidx.annotation.MainThread
+import com.codenameakshay.secure_content.pigeon.AuthResult
+import com.codenameakshay.secure_content.pigeon.BiometricCapability
 import com.codenameakshay.secure_content.pigeon.ProtectionConfig
 import com.codenameakshay.secure_content.pigeon.SecureContentFlutterApi
 import com.codenameakshay.secure_content.pigeon.SecureContentHostApi
@@ -24,6 +27,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     private var flutterApi: SecureContentFlutterApi? = null
     private var screenshotCallback: Activity.ScreenCaptureCallback? = null
     private var clipboard: SensitiveClipboard? = null
+    private var applicationContext: Context? = null
     private val biometricAuthentication = BiometricAuthentication(::onBiometricEvent)
     private val windowProtectionState = WindowProtectionState()
     private var secureEnabled = false
@@ -49,6 +53,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         flutterApi = SecureContentFlutterApi(binding.binaryMessenger)
+        applicationContext = binding.applicationContext
         clipboard = SensitiveClipboard(binding.applicationContext, ::emitEvent)
         SecureContentHostApi.setUp(binding.binaryMessenger, this)
     }
@@ -56,6 +61,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         SecureContentHostApi.setUp(binding.binaryMessenger, null)
         flutterApi = null
+        applicationContext = null
         biometricAuthentication.cancel(emitEvent = false)
         clipboard?.detachEngine()
         clipboard = null
@@ -80,13 +86,37 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     override fun isScreenCaptured(): Boolean = false
 
     override fun requestBiometricAuth(reason: String) {
+        coverLaunchPrompt()
+        biometricAuthentication.request(activity, reason)
+    }
+
+    override fun authenticate(reason: String, biometricOnly: Boolean, callback: (Result<AuthResult>) -> Unit) {
+        coverLaunchPrompt()
+        biometricAuthentication.request(activity, reason, biometricOnly) { result ->
+            endLaunchPromptCover()
+            callback(Result.success(result))
+        }
+    }
+
+    override fun getBiometricCapability(): BiometricCapability =
+        biometricAuthentication.capability(
+            checkNotNull(applicationContext) { "SecureContent is not attached to an engine" },
+        )
+
+    private fun coverLaunchPrompt() {
         if (activity != null && !windowFocusKnown) {
             // A prompt opened at launch can take focus before the window reports any, so no focus
             // change would follow. Cover now without changing the actual window focus state.
             launchPromptCover = true
             applyProtection()
         }
-        biometricAuthentication.request(activity, reason)
+    }
+
+    private fun endLaunchPromptCover() {
+        if (launchPromptCover) {
+            launchPromptCover = false
+            applyProtection()
+        }
     }
 
     override fun checkIntegrity() {
@@ -220,10 +250,7 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
             type == NativeEvent.BIOMETRIC_FAILED ||
             type == NativeEvent.BIOMETRIC_UNAVAILABLE
         ) {
-            if (launchPromptCover) {
-                launchPromptCover = false
-                applyProtection()
-            }
+            endLaunchPromptCover()
         }
         emitEvent(type)
     }

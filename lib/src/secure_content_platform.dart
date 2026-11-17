@@ -60,6 +60,17 @@ class SecureContentPlatform {
     await _hostApi.requestBiometricAuth(reason);
   }
 
+  Future<pigeon.AuthResult> authenticate(
+    String reason, {
+    required bool biometricOnly,
+  }) {
+    return _hostApi.authenticate(reason, biometricOnly);
+  }
+
+  Future<pigeon.BiometricCapability> getBiometricCapability() {
+    return _hostApi.getBiometricCapability();
+  }
+
   Future<void> checkIntegrity() async {
     if (!isSupportedPlatform) {
       return;

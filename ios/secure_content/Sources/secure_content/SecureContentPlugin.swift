@@ -63,6 +63,21 @@ public final class SecureContentPlugin: NSObject, @preconcurrency FlutterPlugin,
     runtime.requestBiometricAuth(reason: reason)
   }
 
+  func authenticate(
+    reason: String, biometricOnly: Bool,
+    completion: @escaping (Result<AuthResult, Error>) -> Void
+  ) {
+    MainActor.preconditionIsolated()
+    runtime.authenticate(reason: reason, biometricOnly: biometricOnly) {
+      completion(.success($0))
+    }
+  }
+
+  func getBiometricCapability() throws -> BiometricCapability {
+    MainActor.preconditionIsolated()
+    return runtime.authentication.biometricCapability()
+  }
+
   func checkIntegrity() throws {
     MainActor.preconditionIsolated()
     runtime.checkIntegrity()

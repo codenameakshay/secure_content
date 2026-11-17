@@ -195,6 +195,38 @@ class FlutterError (
   val details: Any? = null
 ) : RuntimeException()
 
+/** Outcome of [SecureContentHostApi.authenticate]. */
+enum class AuthStatus(val raw: Int) {
+  SUCCESS(0),
+  FAILED(1),
+  CANCELED(2),
+  TIMEOUT(3),
+  TEMPORARY_LOCKOUT(4),
+  PERMANENT_LOCKOUT(5),
+  NOT_ENROLLED(6),
+  NOT_AVAILABLE(7),
+  ERROR(8);
+
+  companion object {
+    fun ofRaw(raw: Int): AuthStatus? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
+enum class BiometryType(val raw: Int) {
+  FACE(0),
+  FINGERPRINT(1),
+  IRIS(2),
+  UNKNOWN(3);
+
+  companion object {
+    fun ofRaw(raw: Int): BiometryType? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 /** Generated class from Pigeon that represents data sent in messages. */
 data class ProtectionConfig (
   val enabled: Boolean,
@@ -293,17 +325,119 @@ data class SecureEvent (
     return "SecureEvent(type=$type, platform=$platform, timestamp=$timestamp)"
   }
 }
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class AuthResult (
+  val status: AuthStatus,
+  val message: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): AuthResult {
+      val status = pigeonVar_list[0] as AuthStatus
+      val message = pigeonVar_list[1] as String?
+      return AuthResult(status, message)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      status,
+      message,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as AuthResult
+    return SecureContentApiPigeonUtils.deepEquals(this.status, other.status) && SecureContentApiPigeonUtils.deepEquals(this.message, other.message)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.status)
+    result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.message)
+    return result
+  }
+  override fun toString(): String {
+    return "AuthResult(status=$status, message=$message)"
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class BiometricCapability (
+  val isAvailable: Boolean,
+  val types: List<BiometryType>
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): BiometricCapability {
+      val isAvailable = pigeonVar_list[0] as Boolean
+      val types = pigeonVar_list[1] as List<BiometryType>
+      return BiometricCapability(isAvailable, types)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      isAvailable,
+      types,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as BiometricCapability
+    return SecureContentApiPigeonUtils.deepEquals(this.isAvailable, other.isAvailable) && SecureContentApiPigeonUtils.deepEquals(this.types, other.types)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.isAvailable)
+    result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.types)
+    return result
+  }
+  override fun toString(): String {
+    return "BiometricCapability(isAvailable=$isAvailable, types=$types)"
+  }
+}
 private open class SecureContentApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
       129.toByte() -> {
+        return (readValue(buffer) as Long?)?.let {
+          AuthStatus.ofRaw(it.toInt())
+        }
+      }
+      130.toByte() -> {
+        return (readValue(buffer) as Long?)?.let {
+          BiometryType.ofRaw(it.toInt())
+        }
+      }
+      131.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           ProtectionConfig.fromList(it)
         }
       }
-      130.toByte() -> {
+      132.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           SecureEvent.fromList(it)
+        }
+      }
+      133.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          AuthResult.fromList(it)
+        }
+      }
+      134.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          BiometricCapability.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -311,12 +445,28 @@ private open class SecureContentApiPigeonCodec : StandardMessageCodec() {
   }
   override fun writeValue(stream: ByteArrayOutputStream, value: Any?)   {
     when (value) {
-      is ProtectionConfig -> {
+      is AuthStatus -> {
         stream.write(129)
+        writeValue(stream, value.raw.toLong())
+      }
+      is BiometryType -> {
+        stream.write(130)
+        writeValue(stream, value.raw.toLong())
+      }
+      is ProtectionConfig -> {
+        stream.write(131)
         writeValue(stream, value.toList())
       }
       is SecureEvent -> {
-        stream.write(130)
+        stream.write(132)
+        writeValue(stream, value.toList())
+      }
+      is AuthResult -> {
+        stream.write(133)
+        writeValue(stream, value.toList())
+      }
+      is BiometricCapability -> {
+        stream.write(134)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -324,11 +474,15 @@ private open class SecureContentApiPigeonCodec : StandardMessageCodec() {
   }
 }
 
+
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface SecureContentHostApi {
   fun configureProtection(config: ProtectionConfig)
   fun isScreenCaptured(): Boolean
   fun requestBiometricAuth(reason: String)
+  /** Replies with the outcome of this one prompt. Emits no biometric events. */
+  fun authenticate(reason: String, biometricOnly: Boolean, callback: (Result<AuthResult>) -> Unit)
+  fun getBiometricCapability(): BiometricCapability
   fun checkIntegrity()
   fun setSensitiveClipboard(content: String, clearAfterMs: Long)
   fun clearSensitiveClipboard()
@@ -384,6 +538,42 @@ interface SecureContentHostApi {
             val wrapped: List<Any?> = try {
               api.requestBiometricAuth(reasonArg)
               listOf(null)
+            } catch (exception: Throwable) {
+              SecureContentApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.secure_content.SecureContentHostApi.authenticate$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val reasonArg = args[0] as String
+            val biometricOnlyArg = args[1] as Boolean
+            api.authenticate(reasonArg, biometricOnlyArg) { result: Result<AuthResult> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(SecureContentApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(SecureContentApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.secure_content.SecureContentHostApi.getBiometricCapability$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.getBiometricCapability())
             } catch (exception: Throwable) {
               SecureContentApiPigeonUtils.wrapError(exception)
             }

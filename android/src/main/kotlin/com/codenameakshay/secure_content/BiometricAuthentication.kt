@@ -1,6 +1,8 @@
 package com.codenameakshay.secure_content
 
 import android.app.Activity
+import android.content.Context
+import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricPrompt as FrameworkBiometricPrompt
 import android.os.Build
 import android.os.CancellationSignal
@@ -13,6 +15,10 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.codenameakshay.secure_content.pigeon.AuthResult
+import com.codenameakshay.secure_content.pigeon.AuthStatus
+import com.codenameakshay.secure_content.pigeon.BiometricCapability
+import com.codenameakshay.secure_content.pigeon.BiometryType
 import java.util.WeakHashMap
 import java.lang.ref.WeakReference
 
@@ -27,26 +33,40 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     private var lifecycleObserver: LifecycleEventObserver? = null
     private var androidXStartAttempted = false
     private var cancellationPending = false
+    private var pendingReply: ((AuthResult) -> Unit)? = null
 
-    fun request(activity: Activity?, reason: String) {
+    /**
+     * Without [reply], reports the outcome as a coarse [NativeEvent]. With [reply], answers
+     * exactly once through it with a detailed [AuthResult] and emits no biometric event.
+     */
+    fun request(
+        activity: Activity?,
+        reason: String,
+        biometricOnly: Boolean = false,
+        reply: ((AuthResult) -> Unit)? = null,
+    ) {
+        fun reject(event: NativeEvent, status: AuthStatus, message: String? = null) {
+            if (reply != null) reply(AuthResult(status, message)) else onEvent(event)
+        }
         if (ownershipKey != null && !cancellationPending) {
+            reply?.invoke(AuthResult(AuthStatus.ERROR, "Another authentication is in progress"))
             return
         }
         if (activity == null || activity.isFinishing || activity.isDestroyed) {
-            onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+            reject(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.NOT_AVAILABLE, "No activity")
             return
         }
 
         val title = reason.ifBlank { "Authenticate" }
         val fragmentActivity = activity as? FragmentActivity
         if (fragmentActivity?.supportFragmentManager?.isStateSaved == true) {
-            onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+            reject(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.NOT_AVAILABLE, "Activity state is saved")
             return
         }
         if (fragmentActivity != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.P &&
             !hasFingerprintDialogTheme(fragmentActivity)
         ) {
-            onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+            reject(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.NOT_AVAILABLE, "Activity theme is not AppCompat")
             return
         }
         val supportsCredentials = if (fragmentActivity != null) {
@@ -54,28 +74,30 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
         } else {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         }
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
-            if (supportsCredentials) BiometricManager.Authenticators.DEVICE_CREDENTIAL else 0
+        val authenticators = allowedAuthenticators(biometricOnly, supportsCredentials)
 
         if (fragmentActivity == null && Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+            reject(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.NOT_AVAILABLE, "Requires a FragmentActivity below API 28")
             return
         }
-        if (BiometricManager.from(activity).canAuthenticate(authenticators) !=
-            BiometricManager.BIOMETRIC_SUCCESS
-        ) {
-            onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+        val availability = BiometricManager.from(activity).canAuthenticate(authenticators)
+        if (availability != BiometricManager.BIOMETRIC_SUCCESS) {
+            reject(NativeEvent.BIOMETRIC_UNAVAILABLE, authStatusForAvailability(availability))
             return
         }
         if (ownershipKey != null) {
             // A canceled AndroidX prompt still owns this host until its terminal callback.
-            onEvent(NativeEvent.BIOMETRIC_FAILED)
+            reject(NativeEvent.BIOMETRIC_FAILED, AuthStatus.ERROR, "The previous prompt is still closing")
             return
         }
         val key = fragmentActivity?.viewModelStore ?: activity
         if (!BiometricActivityOwners.acquire(key, owner, this)) {
             val holderIsCanceling = BiometricActivityOwners.find(key)?.cancellationPending == true
-            onEvent(if (holderIsCanceling) NativeEvent.BIOMETRIC_FAILED else NativeEvent.BIOMETRIC_UNAVAILABLE)
+            reject(
+                if (holderIsCanceling) NativeEvent.BIOMETRIC_FAILED else NativeEvent.BIOMETRIC_UNAVAILABLE,
+                AuthStatus.ERROR,
+                "Another engine is authenticating in this activity",
+            )
             return
         }
         ownershipKey = key
@@ -86,12 +108,26 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
                 watchHost(fragmentActivity)
                 requestAndroidX(fragmentActivity, title, authenticators)
             } else {
-                requestFramework(activity, title)
+                requestFramework(activity, title, biometricOnly)
             }
-        } catch (_: RuntimeException) {
+        } catch (error: RuntimeException) {
             cancel(emitEvent = false)
-            onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+            reject(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.NOT_AVAILABLE, error.message)
+            return
         }
+        // Set only once the prompt started, so a failed start cannot reply twice.
+        pendingReply = reply
+    }
+
+    fun capability(context: Context): BiometricCapability {
+        val available = BiometricManager.from(context)
+            .canAuthenticate(allowedAuthenticators(biometricOnly = true, supportsCredentials = false)) ==
+            BiometricManager.BIOMETRIC_SUCCESS
+        val types = biometryTypes(context.packageManager)
+        return BiometricCapability(
+            available,
+            if (available && types.isEmpty()) listOf(BiometryType.UNKNOWN) else types,
+        )
     }
 
     fun onActivityAttached(activity: Activity) {
@@ -107,7 +143,7 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
         if (prompt != null && androidXStartAttempted) {
             cancellationPending = true
             prompt.cancelAuthentication()
-            if (emitEvent) onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+            respond(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.CANCELED, emitEvent)
             return
         }
         generation += 1
@@ -117,9 +153,18 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
             prompt?.cancelAuthentication()
             cancellation?.cancel()
         } finally {
+            val reply = pendingReply
             releaseOwnership()
+            pendingReply = reply
         }
-        if (emitEvent) onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+        respond(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.CANCELED, emitEvent)
+    }
+
+    /** Answers the pending [request]: its reply when it has one, otherwise an event. */
+    private fun respond(event: NativeEvent, status: AuthStatus, emitEvent: Boolean = true, message: String? = null) {
+        val reply = pendingReply
+        pendingReply = null
+        if (reply != null) reply(AuthResult(status, message)) else if (emitEvent) onEvent(event)
     }
 
     private fun requestAndroidX(
@@ -134,11 +179,11 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
             ContextCompat.getMainExecutor(activity),
             object : AndroidXBiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: AndroidXBiometricPrompt.AuthenticationResult) {
-                    finish(requestGeneration, NativeEvent.BIOMETRIC_SUCCEEDED)
+                    finish(requestGeneration, NativeEvent.BIOMETRIC_SUCCEEDED, AuthStatus.SUCCESS)
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED)
+                    finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED, authStatusForError(errorCode), errString.toString())
                 }
             },
         )
@@ -148,20 +193,21 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
-    private fun requestFramework(activity: Activity, title: String) {
+    private fun requestFramework(activity: Activity, title: String, biometricOnly: Boolean) {
         val requestGeneration = ++generation
         val executor = activity.mainExecutor
         val builder = FrameworkBiometricPrompt.Builder(activity).setTitle(title)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setAllowedAuthenticators(
-                android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
-                    android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+                allowedAuthenticators(biometricOnly, supportsCredentials = true),
             )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !biometricOnly) {
             builder.setDeviceCredentialAllowed(true)
-        } else {
+        }
+        if (biometricOnly || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            // Required whenever the device credential is not allowed.
             builder.setNegativeButton("Cancel", executor) { _, _ ->
-                finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED)
+                finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED, AuthStatus.CANCELED)
             }
         }
         val cancellation = CancellationSignal()
@@ -171,24 +217,26 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
             executor,
             object : FrameworkBiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: FrameworkBiometricPrompt.AuthenticationResult?) {
-                    finish(requestGeneration, NativeEvent.BIOMETRIC_SUCCEEDED)
+                    finish(requestGeneration, NativeEvent.BIOMETRIC_SUCCEEDED, AuthStatus.SUCCESS)
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
-                    finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED)
+                    finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED, authStatusForError(errorCode), errString?.toString())
                 }
             },
         )
     }
 
-    private fun finish(requestGeneration: Long, event: NativeEvent) {
+    private fun finish(requestGeneration: Long, event: NativeEvent, status: AuthStatus, message: String? = null) {
         if (requestGeneration != generation) return
         generation += 1
         val wasCanceled = cancellationPending
         androidXPrompt = null
         frameworkCancellation = null
+        val reply = pendingReply
         releaseOwnership()
-        if (!wasCanceled) onEvent(event)
+        pendingReply = reply
+        if (!wasCanceled) respond(event, status, message = message)
     }
 
     private fun releaseOwnership() {
@@ -200,6 +248,7 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
         ownedActivity = null
         androidXStartAttempted = false
         cancellationPending = false
+        pendingReply = null
     }
 
     private fun watchHost(activity: FragmentActivity) {
@@ -219,8 +268,10 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
                     generation += 1
                     androidXPrompt = null
                     frameworkCancellation = null
+                    val reply = pendingReply
                     releaseOwnership()
-                    if (!wasCanceled) onEvent(NativeEvent.BIOMETRIC_UNAVAILABLE)
+                    pendingReply = reply
+                    if (!wasCanceled) respond(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.CANCELED)
                 }
             }
         }
@@ -272,4 +323,45 @@ internal fun createAndroidXPromptInfo(
         builder.setNegativeButtonText("Cancel")
     }
     return builder.build()
+}
+
+/**
+ * Biometric-only matches local_auth: BIOMETRIC_WEAK (which includes STRONG) with no
+ * DEVICE_CREDENTIAL, so the prompt never offers the PIN, pattern, or password.
+ */
+internal fun allowedAuthenticators(biometricOnly: Boolean, supportsCredentials: Boolean): Int =
+    BiometricManager.Authenticators.BIOMETRIC_WEAK or
+        if (supportsCredentials && !biometricOnly) BiometricManager.Authenticators.DEVICE_CREDENTIAL else 0
+
+/** Maps a BiometricPrompt error code. AndroidX and the framework share the values. */
+internal fun authStatusForError(errorCode: Int): AuthStatus = when (errorCode) {
+    AndroidXBiometricPrompt.ERROR_USER_CANCELED,
+    AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON,
+    AndroidXBiometricPrompt.ERROR_CANCELED,
+    -> AuthStatus.CANCELED
+    AndroidXBiometricPrompt.ERROR_TIMEOUT -> AuthStatus.TIMEOUT
+    AndroidXBiometricPrompt.ERROR_LOCKOUT -> AuthStatus.TEMPORARY_LOCKOUT
+    AndroidXBiometricPrompt.ERROR_LOCKOUT_PERMANENT -> AuthStatus.PERMANENT_LOCKOUT
+    AndroidXBiometricPrompt.ERROR_NO_BIOMETRICS -> AuthStatus.NOT_ENROLLED
+    AndroidXBiometricPrompt.ERROR_HW_UNAVAILABLE,
+    AndroidXBiometricPrompt.ERROR_HW_NOT_PRESENT,
+    AndroidXBiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL,
+    AndroidXBiometricPrompt.ERROR_SECURITY_UPDATE_REQUIRED,
+    -> AuthStatus.NOT_AVAILABLE
+    else -> AuthStatus.ERROR
+}
+
+/** Maps a failed [BiometricManager.canAuthenticate] result. */
+internal fun authStatusForAvailability(result: Int): AuthStatus = when (result) {
+    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> AuthStatus.NOT_ENROLLED
+    else -> AuthStatus.NOT_AVAILABLE
+}
+
+/** Best effort: Android does not say which sensor holds an enrolled biometric. */
+internal fun biometryTypes(packageManager: PackageManager): List<BiometryType> = buildList {
+    if (packageManager.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)) add(BiometryType.FINGERPRINT)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (packageManager.hasSystemFeature(PackageManager.FEATURE_FACE)) add(BiometryType.FACE)
+        if (packageManager.hasSystemFeature(PackageManager.FEATURE_IRIS)) add(BiometryType.IRIS)
+    }
 }

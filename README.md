@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/b6ef5914-eb3a-4e17-be0c-2f00538cffec
 - Screenshot detection and recording obscuring
 - App switcher protection with configurable color and optional branding image (iOS)
 - Android 14+ screenshot callback support
-- Biometric/device credential re-auth hooks
+- Biometric-only or biometric/device credential authentication with a typed result
 - Inactivity auto-lock for secure areas
 - Integrity risk checks (root/jailbreak/debugger/emulator heuristics)
 - Soft mode events and optional hard-block mode
@@ -71,7 +71,7 @@ fingerprint implementation required by stable Biometric on Android 23–27.
 
 ```yaml
 dependencies:
-  secure_content: ^3.0.0
+  secure_content: ^3.1.0
 ```
 
 For Face ID authentication, add a usage description to the host app's
@@ -120,6 +120,72 @@ SecureContentScope(
   child: const YourSensitiveWidget(),
 )
 ```
+
+## Authentication
+
+`SecureContent.authenticate` shows one system prompt and returns its outcome:
+
+```dart
+final capability = await SecureContent.getBiometricCapability();
+if (capability.isAvailable) {
+  final usesFace = capability.types.contains(SecureContentBiometryType.face);
+  final result = await SecureContent.authenticate(
+    reason: usesFace ? 'Unlock with Face ID' : 'Unlock with your fingerprint',
+    biometricOnly: true,
+  );
+  switch (result.status) {
+    case SecureContentAuthStatus.success:
+      unlock();
+    case SecureContentAuthStatus.canceled:
+    case SecureContentAuthStatus.failed:
+      break; // Stay locked. Show no error.
+    case SecureContentAuthStatus.temporaryLockout:
+      showError('Too many attempts. Wait a moment, then try again.');
+    case SecureContentAuthStatus.permanentLockout:
+      showError('Unlock your device with its passcode, then try again.');
+    default:
+      showError('Could not check your biometrics.');
+  }
+}
+```
+
+With `biometricOnly: true`, the prompt accepts only a biometric. It never
+offers the device passcode, PIN, or pattern, so a person who holds an unlocked
+phone cannot use the passcode to get in:
+
+- iOS uses `.deviceOwnerAuthenticationWithBiometrics` and hides the
+  "Enter Password" fallback button.
+- Android allows `BIOMETRIC_WEAK` (which includes `BIOMETRIC_STRONG`) without
+  `DEVICE_CREDENTIAL`, and shows a **Cancel** button. This matches
+  `local_auth` with `biometricOnly: true`.
+
+With the default `biometricOnly: false`, the prompt also accepts the device
+credential, as `requestBiometricAuth` and `SecureContentScope` do.
+
+| Status | Meaning |
+| ------ | ------- |
+| `success` | The person authenticated. |
+| `failed` | The biometric was not recognized. |
+| `canceled` | The person, the app, or the system closed the prompt. On iOS this includes Cancel and the fallback button. |
+| `timeout` | The prompt timed out (Android). |
+| `temporaryLockout` | Too many attempts. Biometrics return after a short wait (Android). |
+| `permanentLockout` | Too many attempts. The device passcode is needed before biometrics work again. |
+| `notEnrolled` | The device has biometric hardware but no biometric is enrolled. |
+| `notAvailable` | Authentication cannot run on this device or platform. |
+| `error` | Any other error. `result.message` has the platform description. |
+
+Only one prompt runs at a time. Calls made while a prompt is up share it when
+their `biometricOnly` values match. Otherwise a call waits for the current
+prompt to close, then opens its own, so a prompt that accepts the passcode
+never answers a biometric-only call. `authenticate` emits no biometric events
+on `SecureContent.events`.
+
+`getBiometricCapability()` reports `isAvailable` when a biometric is enrolled.
+It stays `true` during a lockout, and `authenticate` reports the lockout.
+`types` lists the sensors the device has (`face`, `fingerprint`, `iris`). On
+iOS this comes from `LAContext.biometryType`. On Android it comes from the
+device's declared features and is best effort; it is `[unknown]` when
+biometrics work but no known sensor feature is declared.
 
 ## Scope and Native Protection
 
@@ -284,6 +350,7 @@ Key event types include:
 See `example/lib/main.dart` for a complete implementation including:
 - global protection toggle
 - biometric trigger
+- biometric-only unlock with `SecureContent.authenticate`
 - integrity check trigger
 - clipboard TTL action
 - hard-block mode toggle

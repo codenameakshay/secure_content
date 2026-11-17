@@ -44,6 +44,94 @@ final class SecureContentAuthenticationTests: XCTestCase {
     XCTAssertEqual(second.invalidationCount, 1)
   }
 
+  func testBiometricOnlyUsesBiometricPolicyAndHidesFallback() {
+    let context = ControlledAuthenticationContext()
+    let authentication = SecureContentAuthentication(contextProvider: { context })
+    var results: [AuthResult] = []
+    authentication.authenticate(reason: "Unlock", biometricOnly: true) { results.append($0) }
+
+    XCTAssertEqual(context.evaluatedPolicy, .deviceOwnerAuthenticationWithBiometrics)
+    XCTAssertEqual(context.localizedFallbackTitle, "")
+    context.complete(success: true)
+    drainMainQueue()
+    XCTAssertEqual(results, [AuthResult(status: .success)])
+  }
+
+  func testDefaultPolicyStillAllowsThePasscode() {
+    let context = ControlledAuthenticationContext()
+    let authentication = SecureContentAuthentication(contextProvider: { context })
+    authentication.authenticate(reason: "Unlock", biometricOnly: false) { _ in }
+    XCTAssertEqual(context.evaluatedPolicy, .deviceOwnerAuthentication)
+    XCTAssertNil(context.localizedFallbackTitle)
+
+    let legacy = ControlledAuthenticationContext()
+    SecureContentAuthentication(contextProvider: { legacy }).request(reason: "Unlock") { _ in }
+    XCTAssertEqual(legacy.evaluatedPolicy, .deviceOwnerAuthentication)
+  }
+
+  func testEvaluationErrorsMapToStatuses() {
+    let expected: [(LAError.Code, AuthStatus)] = [
+      (.userCancel, .canceled), (.systemCancel, .canceled), (.appCancel, .canceled),
+      (.userFallback, .canceled), (.authenticationFailed, .failed),
+      (.biometryLockout, .permanentLockout), (.biometryNotEnrolled, .notEnrolled),
+      (.biometryNotAvailable, .notAvailable), (.passcodeNotSet, .notAvailable),
+      (.invalidContext, .error), (.notInteractive, .error),
+    ]
+    for (code, status) in expected {
+      let context = ControlledAuthenticationContext()
+      let authentication = SecureContentAuthentication(contextProvider: { context })
+      var results: [AuthResult] = []
+      authentication.authenticate(reason: "r", biometricOnly: true) { results.append($0) }
+      context.complete(success: false, error: LAError(code))
+      drainMainQueue()
+      XCTAssertEqual(results.map(\.status), [status], "\(code)")
+      XCTAssertNotNil(results.first?.message, "\(code)")
+    }
+  }
+
+  func testUnavailablePolicyRepliesWithoutPrompting() {
+    let context = ControlledAuthenticationContext()
+    context.canEvaluateError = LAError(.biometryNotEnrolled)
+    let authentication = SecureContentAuthentication(contextProvider: { context })
+    var results: [AuthResult] = []
+    authentication.authenticate(reason: "r", biometricOnly: true) { results.append($0) }
+    XCTAssertEqual(results.map(\.status), [.notEnrolled])
+    XCTAssertNil(context.evaluatedPolicy)
+    XCTAssertNil(authentication.context)
+  }
+
+  func testCancelledOrReplacedAuthenticateRepliesOnceAsCanceled() {
+    let first = ControlledAuthenticationContext()
+    let second = ControlledAuthenticationContext()
+    var nextContext: LAContext = first
+    let authentication = SecureContentAuthentication(contextProvider: { nextContext })
+    var firstResults: [AuthResult] = []
+    var secondResults: [AuthResult] = []
+    authentication.authenticate(reason: "1", biometricOnly: true) { firstResults.append($0) }
+    nextContext = second
+    authentication.authenticate(reason: "2", biometricOnly: true) { secondResults.append($0) }
+    XCTAssertEqual(firstResults, [AuthResult(status: .canceled)])
+
+    first.complete(success: true)
+    authentication.cancel()
+    second.complete(success: true)
+    drainMainQueue()
+    XCTAssertEqual(firstResults, [AuthResult(status: .canceled)])
+    XCTAssertEqual(secondResults, [AuthResult(status: .canceled)])
+  }
+
+  func testCapabilityReportsEnrolledBiometricsAndLockout() {
+    let context = ControlledAuthenticationContext()
+    let authentication = SecureContentAuthentication(contextProvider: { context })
+    XCTAssertTrue(authentication.biometricCapability().isAvailable)
+
+    context.canEvaluateError = LAError(.biometryLockout)
+    XCTAssertTrue(authentication.biometricCapability().isAvailable)
+
+    context.canEvaluateError = LAError(.biometryNotEnrolled)
+    XCTAssertFalse(authentication.biometricCapability().isAvailable)
+  }
+
   private func drainMainQueue() {
     let drained = expectation(description: "Authentication callbacks drained")
     DispatchQueue.main.async { drained.fulfill() }
@@ -56,12 +144,23 @@ final class ControlledAuthenticationContext: LAContext {
   private var reply: ((Bool, Error?) -> Void)?
   private var storedReason: String?
   private var storedInvalidationCount = 0
+  private var storedPolicy: LAPolicy?
+  private var storedCanEvaluateError: LAError?
 
   var reason: String? { lock.withLock { storedReason } }
   var invalidationCount: Int { lock.withLock { storedInvalidationCount } }
+  var evaluatedPolicy: LAPolicy? { lock.withLock { storedPolicy } }
+  var canEvaluateError: LAError? {
+    get { lock.withLock { storedCanEvaluateError } }
+    set { lock.withLock { storedCanEvaluateError = newValue } }
+  }
 
   override func canEvaluatePolicy(_ policy: LAPolicy, error: NSErrorPointer) -> Bool {
     if invalidationCount > 0 { return super.canEvaluatePolicy(policy, error: error) }
+    if let canEvaluateError {
+      error?.pointee = canEvaluateError as NSError
+      return false
+    }
     return true
   }
 
@@ -72,6 +171,7 @@ final class ControlledAuthenticationContext: LAContext {
   ) {
     lock.withLock {
       storedReason = localizedReason
+      storedPolicy = policy
       self.reply = reply
     }
   }
@@ -82,8 +182,8 @@ final class ControlledAuthenticationContext: LAContext {
   }
 
   @MainActor
-  func complete(success: Bool) {
+  func complete(success: Bool, error: Error? = nil) {
     let callback = lock.withLock { reply }
-    callback?(success, nil)
+    callback?(success, error)
   }
 }

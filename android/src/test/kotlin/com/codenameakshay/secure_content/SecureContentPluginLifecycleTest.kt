@@ -11,6 +11,10 @@ import android.os.Message
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import com.codenameakshay.secure_content.pigeon.AuthResult
+import com.codenameakshay.secure_content.pigeon.AuthStatus
+import com.codenameakshay.secure_content.pigeon.BiometricCapability
+import com.codenameakshay.secure_content.pigeon.BiometryType
 import com.codenameakshay.secure_content.pigeon.ProtectionConfig
 import com.codenameakshay.secure_content.pigeon.SecureContentFlutterApi
 import com.codenameakshay.secure_content.pigeon.SecureEvent
@@ -33,6 +37,7 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowBiometricManager
 import org.robolectric.shadows.ShadowBiometricPrompt
 import org.robolectric.shadows.ShadowFingerprintManager
 import org.robolectric.shadow.api.Shadow
@@ -545,6 +550,89 @@ class SecureContentPluginLifecycleTest {
         ShadowBiometricPrompt.authenticateCurrentSessionSuccessfully()
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(listOf("biometricAuthSucceeded"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun biometricOnlyAuthenticateOffersNoDeviceCredentialAndRepliesWithoutEvents() {
+        plugin.onAttachedToActivity(activityBinding(activity()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+
+        val prompt = ShadowBiometricPrompt.getCurrentPrompt()!!
+        assertEquals(BiometricManager.Authenticators.BIOMETRIC_WEAK, prompt.allowedAuthenticators)
+        assertEquals("Cancel", prompt.negativeButtonText)
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT_PERMANENT, "Locked")
+        currentPromptCallback().onAuthenticationSucceeded(null)
+
+        assertEquals(listOf(AuthResult(AuthStatus.PERMANENT_LOCKOUT, "Locked")), results)
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun defaultAuthenticateStillAcceptsTheDeviceCredential() {
+        plugin.onAttachedToActivity(activityBinding(activity()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", false) { results.add(it.getOrThrow()) }
+
+        val prompt = ShadowBiometricPrompt.getCurrentPrompt()!!
+        assertEquals(
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+            prompt.allowedAuthenticators,
+        )
+        currentPromptCallback().onAuthenticationSucceeded(null)
+
+        assertEquals(listOf(AuthResult(AuthStatus.SUCCESS)), results)
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun activityDetachRepliesCanceledOnceToAPendingAuthenticate() {
+        plugin.onAttachedToActivity(activityBinding(activity()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        val callback = currentPromptCallback()
+
+        plugin.onDetachedFromActivityForConfigChanges()
+        callback.onAuthenticationSucceeded(null)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun authenticateWithoutAnActivityRepliesNotAvailable() {
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+
+        assertEquals(listOf(AuthStatus.NOT_AVAILABLE), results.map { it.status })
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun capabilityReportsDeclaredSensorsAndWhetherBiometricsCanRun() {
+        val packageManager = shadowOf(application.packageManager)
+        packageManager.setSystemFeature(PackageManager.FEATURE_FINGERPRINT, true)
+        packageManager.setSystemFeature(PackageManager.FEATURE_FACE, true)
+        val biometricManager = Shadow.extract<ShadowBiometricManager>(
+            application.getSystemService(android.hardware.biometrics.BiometricManager::class.java),
+        )
+
+        biometricManager.setCanAuthenticate(true)
+        assertEquals(
+            BiometricCapability(true, listOf(BiometryType.FINGERPRINT, BiometryType.FACE)),
+            plugin.getBiometricCapability(),
+        )
+        biometricManager.setCanAuthenticate(false)
+        assertEquals(
+            BiometricCapability(false, listOf(BiometryType.FINGERPRINT, BiometryType.FACE)),
+            plugin.getBiometricCapability(),
+        )
         plugin.onDetachedFromEngine(binding)
     }
 
