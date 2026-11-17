@@ -50,6 +50,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import java.lang.reflect.Proxy
 import java.nio.ByteBuffer
+import java.time.Duration
 import java.util.concurrent.Executor
 
 @RunWith(RobolectricTestRunner::class)
@@ -624,7 +625,7 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
-    fun androidXCancellationDeliveredAfterResumeStaysAPlainCancellation() {
+    fun androidXCancellationDeliveredAfterResumeIsStillAnInterruption() {
         val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
         plugin.onAttachedToActivity(activityBinding(controller.get()))
         val results = mutableListOf<AuthResult>()
@@ -639,13 +640,13 @@ class SecureContentPluginLifecycleTest {
         controller.start().resume()
         shadowOf(Looper.getMainLooper()).idle()
 
-        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled")), results)
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true)), results)
         plugin.onDetachedFromEngine(binding)
         controller.pause().stop().destroy()
     }
 
     @Test
-    fun frameworkUserCancellationAndResumedSystemCancellationNeverInterrupt() {
+    fun frameworkCancelsInterruptOnlyAfterTheHostLeftTheForeground() {
         val cases = listOf(
             AndroidXBiometricPrompt.ERROR_USER_CANCELED to true,
             AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON to true,
@@ -663,8 +664,15 @@ class SecureContentPluginLifecycleTest {
             if (background) activity.registry.currentState = Lifecycle.State.CREATED
 
             currentPromptCallback().onAuthenticationError(errorCode, "Canceled")
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
 
-            assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled")), results)
+            // Android 11+ dismisses a backgrounded prompt as ERROR_USER_CANCELED.
+            val interrupted = background && errorCode != AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON
+            assertEquals(
+                "$errorCode background=$background",
+                listOf(AuthResult(AuthStatus.CANCELED, "Canceled", if (interrupted) true else null)),
+                results,
+            )
             assertTrue(messenger.events.isEmpty())
             plugin.onDetachedFromActivity()
             controller.pause().stop().destroy()
@@ -673,7 +681,7 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
-    fun androidXUserCancellationAndResumedSystemCancellationNeverInterrupt() {
+    fun androidXCancelsInterruptOnlyAfterTheHostLeftTheForeground() {
         val cases = listOf(
             AndroidXBiometricPrompt.ERROR_USER_CANCELED to true,
             AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON to true,
@@ -690,14 +698,20 @@ class SecureContentPluginLifecycleTest {
             if (background) controller.pause().stop()
 
             currentPromptCallback().onAuthenticationError(errorCode, "Canceled")
-            shadowOf(Looper.getMainLooper()).idle()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
             if (background) {
                 assertTrue(results.isEmpty())
                 controller.start().resume()
                 shadowOf(Looper.getMainLooper()).idle()
             }
 
-            assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled")), results)
+            // Android 11+ dismisses a backgrounded prompt as ERROR_USER_CANCELED.
+            val interrupted = background && errorCode != AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON
+            assertEquals(
+                "$errorCode background=$background",
+                listOf(AuthResult(AuthStatus.CANCELED, "Canceled", if (interrupted) true else null)),
+                results,
+            )
             assertTrue(messenger.events.isEmpty())
             plugin.onDetachedFromActivity()
             controller.pause().stop().destroy()
@@ -735,6 +749,57 @@ class SecureContentPluginLifecycleTest {
         assertTrue(messenger.events.isEmpty())
         plugin.onDetachedFromEngine(binding)
         newController.pause().stop().destroy()
+    }
+
+    @Test
+    fun aGestureDismissalFollowedByAPauseIsAnInterruption() {
+        val activity = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        activity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onAttachedToActivity(activityBinding(activity))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+
+        // Android 16 reports a Home gesture this way, while the host is still resumed.
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED, "Canceled")
+        assertTrue(results.isEmpty())
+        activity.registry.currentState = Lifecycle.State.STARTED
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true)), results)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun aCancelWithoutAPauseStaysAPlainCancelAfterTheGraceWindow() {
+        val activity = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        activity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onAttachedToActivity(activityBinding(activity))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED, "Canceled")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS - 1))
+        assertTrue(results.isEmpty())
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled")), results)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun aDetachDuringTheGraceWindowRepliesOnce() {
+        val activity = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        activity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onAttachedToActivity(activityBinding(activity))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED, "Canceled")
+        plugin.onDetachedFromActivity()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+        plugin.onDetachedFromEngine(binding)
     }
 
     @Test

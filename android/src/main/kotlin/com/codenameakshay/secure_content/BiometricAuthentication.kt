@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricPrompt as FrameworkBiometricPrompt
 import android.os.Build
 import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.RequiresApi
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AlertDialog
@@ -35,6 +37,17 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     private var androidXStartAttempted = false
     private var cancellationPending = false
     private var pendingReply: ((AuthResult) -> Unit)? = null
+
+    // Set when the host pauses while a prompt is up. Android 11+ dismisses the prompt for a
+    // Home or app-switch gesture as ERROR_USER_CANCELED, a few milliseconds before the host
+    // pauses, and AndroidX can deliver ERROR_CANCELED only after the host resumes. The error
+    // code alone cannot tell that from a real cancel.
+    private var hostLeftForeground = false
+    private var foregroundLifecycle: Lifecycle? = null
+    private val foregroundObserver = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_PAUSE) hostLeftForeground = true
+    }
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
      * Without [reply], reports the outcome as a coarse [NativeEvent]. With [reply], answers
@@ -104,6 +117,10 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
         }
         ownershipKey = key
         ownedActivity = activity
+        hostLeftForeground = false
+        foregroundLifecycle = (activity as? LifecycleOwner)?.lifecycle?.also {
+            it.addObserver(foregroundObserver)
+        }
 
         try {
             if (fragmentActivity != null) {
@@ -200,13 +217,7 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    finish(
-                        requestGeneration,
-                        NativeEvent.BIOMETRIC_FAILED,
-                        authStatusForError(errorCode),
-                        errString.toString(),
-                        isInterruption(errorCode, ownedActivity),
-                    )
+                    finishError(requestGeneration, errorCode, errString.toString())
                 }
             },
         )
@@ -244,16 +255,31 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
-                    finish(
-                        requestGeneration,
-                        NativeEvent.BIOMETRIC_FAILED,
-                        authStatusForError(errorCode),
-                        errString?.toString(),
-                        isInterruption(errorCode, ownedActivity),
-                    )
+                    finishError(requestGeneration, errorCode, errString?.toString())
                 }
             },
         )
+    }
+
+    private fun finishError(requestGeneration: Long, errorCode: Int, message: String?) {
+        val report = {
+            finish(
+                requestGeneration,
+                NativeEvent.BIOMETRIC_FAILED,
+                authStatusForError(errorCode),
+                message,
+                isInterruption(errorCode, ownedActivity, hostLeftForeground),
+            )
+        }
+        val hostStillResumed = (ownedActivity as? LifecycleOwner)?.lifecycle?.currentState
+            ?.isAtLeast(Lifecycle.State.RESUMED) == true
+        if (pendingReply != null && isCancelCode(errorCode) && !hostLeftForeground && hostStillResumed) {
+            // The host pauses just after a gesture dismissal. Wait briefly to see which this was;
+            // `finish` ignores the report if the request was canceled or replaced meanwhile.
+            mainHandler.postDelayed(report, INTERRUPTION_GRACE_MS)
+        } else {
+            report()
+        }
     }
 
     private fun finish(
@@ -281,6 +307,9 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
         ownershipKey?.let { BiometricActivityOwners.release(it, owner) }
         ownershipKey = null
         ownedActivity = null
+        foregroundLifecycle?.removeObserver(foregroundObserver)
+        foregroundLifecycle = null
+        hostLeftForeground = false
         androidXStartAttempted = false
         cancellationPending = false
         pendingReply = null
@@ -387,12 +416,29 @@ internal fun authStatusForError(errorCode: Int): AuthStatus = when (errorCode) {
 }
 
 /**
- * The system cancels the prompt when its host leaves the foreground. A host that is not a
- * [LifecycleOwner] is treated as in the foreground, so its cancels stay plain cancels.
+ * ponytail: measured on an API 36 emulator, the host pauses 0-10 ms after a gesture dismissal.
+ * Raise this if slow devices report gesture dismissals as plain cancels.
  */
-internal fun isInterruption(errorCode: Int, host: Any?): Boolean =
-    errorCode == AndroidXBiometricPrompt.ERROR_CANCELED &&
-        (host as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == false
+internal const val INTERRUPTION_GRACE_MS = 300L
+
+private fun isCancelCode(errorCode: Int): Boolean =
+    errorCode == AndroidXBiometricPrompt.ERROR_CANCELED || errorCode == AndroidXBiometricPrompt.ERROR_USER_CANCELED
+
+/**
+ * The system dismisses the prompt when its host leaves the foreground, with ERROR_CANCELED or,
+ * on Android 11+, ERROR_USER_CANCELED. Either counts as an interruption once the host paused
+ * during the prompt or is not resumed now. The negative button is always the person's choice.
+ * A host that is not a [LifecycleOwner] is treated as in the foreground.
+ *
+ * ponytail: a prompt that survives a pause and is then dismissed by the person in the foreground
+ * reopens once. Track prompt visibility if that matters.
+ */
+internal fun isInterruption(errorCode: Int, host: Any?, hostLeftForeground: Boolean = false): Boolean =
+    isCancelCode(errorCode) &&
+        (
+            hostLeftForeground ||
+                (host as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == false
+            )
 
 /** Maps a failed [BiometricManager.canAuthenticate] result. */
 internal fun authStatusForAvailability(result: Int): AuthStatus = when (result) {
