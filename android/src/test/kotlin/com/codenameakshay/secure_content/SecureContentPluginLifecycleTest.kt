@@ -43,6 +43,7 @@ import org.robolectric.shadows.ShadowFingerprintManager
 import org.robolectric.shadow.api.Shadow
 import org.robolectric.util.ReflectionHelpers
 import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt as AndroidXBiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -620,6 +621,120 @@ class SecureContentPluginLifecycleTest {
 
         assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true)), results)
         plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun androidXCancellationDeliveredAfterResumeStaysAPlainCancellation() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idle()
+
+        controller.pause().stop()
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_CANCELED, "Canceled")
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(results.isEmpty())
+
+        controller.start().resume()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled")), results)
+        plugin.onDetachedFromEngine(binding)
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun frameworkUserCancellationAndResumedSystemCancellationNeverInterrupt() {
+        val cases = listOf(
+            AndroidXBiometricPrompt.ERROR_USER_CANCELED to true,
+            AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON to true,
+            AndroidXBiometricPrompt.ERROR_USER_CANCELED to false,
+            AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON to false,
+            AndroidXBiometricPrompt.ERROR_CANCELED to false,
+        )
+        for ((errorCode, background) in cases) {
+            val controller = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup()
+            val activity = controller.get()
+            activity.registry.currentState = Lifecycle.State.RESUMED
+            plugin.onAttachedToActivity(activityBinding(activity))
+            val results = mutableListOf<AuthResult>()
+            plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+            if (background) activity.registry.currentState = Lifecycle.State.CREATED
+
+            currentPromptCallback().onAuthenticationError(errorCode, "Canceled")
+
+            assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled")), results)
+            assertTrue(messenger.events.isEmpty())
+            plugin.onDetachedFromActivity()
+            controller.pause().stop().destroy()
+        }
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun androidXUserCancellationAndResumedSystemCancellationNeverInterrupt() {
+        val cases = listOf(
+            AndroidXBiometricPrompt.ERROR_USER_CANCELED to true,
+            AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON to true,
+            AndroidXBiometricPrompt.ERROR_USER_CANCELED to false,
+            AndroidXBiometricPrompt.ERROR_NEGATIVE_BUTTON to false,
+            AndroidXBiometricPrompt.ERROR_CANCELED to false,
+        )
+        for ((errorCode, background) in cases) {
+            val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+            plugin.onAttachedToActivity(activityBinding(controller.get()))
+            val results = mutableListOf<AuthResult>()
+            plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+            shadowOf(Looper.getMainLooper()).idle()
+            if (background) controller.pause().stop()
+
+            currentPromptCallback().onAuthenticationError(errorCode, "Canceled")
+            shadowOf(Looper.getMainLooper()).idle()
+            if (background) {
+                assertTrue(results.isEmpty())
+                controller.start().resume()
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+
+            assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled")), results)
+            assertTrue(messenger.events.isEmpty())
+            plugin.onDetachedFromActivity()
+            controller.pause().stop().destroy()
+        }
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun activityReplacementAfterAnInterruptionAllowsOneFreshPrompt() {
+        val oldController = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup()
+        val oldActivity = oldController.get()
+        oldActivity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onAttachedToActivity(activityBinding(oldActivity))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        val oldCallback = currentPromptCallback()
+        oldActivity.registry.currentState = Lifecycle.State.CREATED
+        oldCallback.onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_CANCELED, "Canceled")
+
+        plugin.onDetachedFromActivityForConfigChanges()
+        oldController.pause().stop().destroy()
+        val newController = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup()
+        newController.get().registry.currentState = Lifecycle.State.RESUMED
+        plugin.onReattachedToActivityForConfigChanges(activityBinding(newController.get()))
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true)), results)
+
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        oldCallback.onAuthenticationSucceeded(null)
+        currentPromptCallback().onAuthenticationSucceeded(null)
+
+        assertEquals(
+            listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true), AuthResult(AuthStatus.SUCCESS)),
+            results,
+        )
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+        newController.pause().stop().destroy()
     }
 
     @Test

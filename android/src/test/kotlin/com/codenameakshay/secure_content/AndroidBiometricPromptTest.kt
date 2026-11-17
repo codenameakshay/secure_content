@@ -84,6 +84,7 @@ class AndroidBiometricPromptTest {
         host.registry.currentState = Lifecycle.State.CREATED
         assertTrue(isInterruption(BiometricPrompt.ERROR_CANCELED, host))
         assertFalse(isInterruption(BiometricPrompt.ERROR_USER_CANCELED, host))
+        assertFalse(isInterruption(BiometricPrompt.ERROR_NEGATIVE_BUTTON, host))
         assertFalse(isInterruption(BiometricPrompt.ERROR_CANCELED, Any()))
     }
 }

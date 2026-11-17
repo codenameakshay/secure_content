@@ -40,6 +40,9 @@ class SecureContentService {
 
   Future<SecureContentAuthResult>? _authRequest;
   ({bool biometricOnly, bool persist})? _authRequestKey;
+  Completer<pigeon.AuthResult>? _authCancellation;
+  AppLifecycleListener? _authLifecycleListener;
+  bool _isDisposed = false;
 
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
@@ -58,6 +61,7 @@ class SecureContentService {
   /// [SecureContentService] consumer and a biometric outcome on it may belong
   /// to a request some other, unrelated caller made.
   Future<SecureContentEventType> requestBiometricAuth(String reason) async {
+    if (_isDisposed) return SecureContentEventType.biometricAuthFailed;
     if (!_platform.isSupportedPlatform) {
       return SecureContentEventType.biometricUnavailable;
     }
@@ -85,6 +89,7 @@ class SecureContentService {
     String reason,
     Completer<SecureContentEventType> completer,
   ) {
+    if (!identical(_biometricRequest, completer)) return;
     _biometricResultSubscription = _eventsController.stream.listen((event) {
       switch (event.type) {
         case SecureContentEventType.biometricAuthSucceeded:
@@ -137,6 +142,9 @@ class SecureContentService {
       persist: persistAcrossBackgrounding,
     );
     while (true) {
+      if (_isDisposed) {
+        return const SecureContentAuthResult(SecureContentAuthStatus.canceled);
+      }
       final auth = _authRequest;
       if (auth != null && _authRequestKey == key) {
         return auth;
@@ -162,41 +170,51 @@ class SecureContentService {
     String reason,
     ({bool biometricOnly, bool persist}) key,
   ) async {
-    while (true) {
-      final pigeon.AuthResult reply;
-      try {
-        reply = await _platform.authenticate(
-          reason,
-          biometricOnly: key.biometricOnly,
-        );
-      } catch (error) {
-        return SecureContentAuthResult(
-          SecureContentAuthStatus.error,
-          message: '$error',
+    final cancellation = Completer<pigeon.AuthResult>();
+    _authCancellation = cancellation;
+    var nextResume = Completer<void>();
+    if (key.persist) {
+      _authLifecycleListener = AppLifecycleListener(
+        onResume: () {
+          final resumed = nextResume;
+          nextResume = Completer<void>();
+          resumed.complete();
+        },
+      );
+    }
+    try {
+      while (!_isDisposed) {
+        final resumeAfterPrompt = nextResume.future;
+        final reply = await Future.any<pigeon.AuthResult>([
+          _platform.authenticate(reason, biometricOnly: key.biometricOnly),
+          cancellation.future,
+        ]);
+        if (!key.persist || reply.interrupted != true) {
+          return SecureContentAuthResult.fromPigeon(reply);
+        }
+        await Future.any<Object?>([resumeAfterPrompt, cancellation.future]);
+        while (!_isDisposed &&
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed) {
+          await Future.any<Object?>([nextResume.future, cancellation.future]);
+        }
+      }
+      return const SecureContentAuthResult(SecureContentAuthStatus.canceled);
+    } catch (error) {
+      return SecureContentAuthResult(
+        SecureContentAuthStatus.error,
+        message: '$error',
+      );
+    } finally {
+      _authLifecycleListener?.dispose();
+      _authLifecycleListener = null;
+      _authCancellation = null;
+      if (!cancellation.isCompleted) {
+        cancellation.complete(
+          pigeon.AuthResult(status: pigeon.AuthStatus.canceled),
         );
       }
-      if (!key.persist || reply.interrupted != true) {
-        return SecureContentAuthResult.fromPigeon(reply);
-      }
-      await _resumed();
     }
-  }
-
-  /// Completes once the app is in the foreground. Lifecycle changes reach Dart
-  /// before a later native reply, so a resumed state here is current.
-  Future<void> _resumed() {
-    if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-      return Future<void>.value();
-    }
-    final resumed = Completer<void>();
-    late final AppLifecycleListener listener;
-    listener = AppLifecycleListener(
-      onResume: () {
-        listener.dispose();
-        resumed.complete();
-      },
-    );
-    return resumed.future;
   }
 
   Future<SecureContentBiometricCapability> getBiometricCapability() async {
@@ -345,6 +363,14 @@ class SecureContentService {
   }
 
   void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    _authLifecycleListener?.dispose();
+    _authLifecycleListener = null;
+    _authCancellation?.complete(
+      pigeon.AuthResult(status: pigeon.AuthStatus.canceled),
+    );
+    _completeBiometricRequest(SecureContentEventType.biometricAuthFailed);
     _eventSubscription?.cancel();
     unawaited(_biometricResultSubscription?.cancel());
     _eventsController.close();

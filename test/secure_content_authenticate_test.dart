@@ -8,8 +8,24 @@ import 'package:secure_content/src/pigeon/secure_content_api.g.dart' as pigeon;
 import 'package:secure_content/src/secure_content_platform.dart';
 import 'package:secure_content/src/secure_content_service.dart';
 
+class _LifecycleBinding extends AutomatedTestWidgetsFlutterBinding {
+  final Set<WidgetsBindingObserver> lifecycleListeners = {};
+
+  @override
+  void addObserver(WidgetsBindingObserver observer) {
+    super.addObserver(observer);
+    if (observer is AppLifecycleListener) lifecycleListeners.add(observer);
+  }
+
+  @override
+  bool removeObserver(WidgetsBindingObserver observer) {
+    lifecycleListeners.remove(observer);
+    return super.removeObserver(observer);
+  }
+}
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = _LifecycleBinding();
 
   const prefix = 'dev.flutter.pigeon.secure_content.SecureContentHostApi';
   final codec = pigeon.SecureContentHostApi.pigeonChannelCodec;
@@ -252,6 +268,103 @@ void main() {
   group('persistAcrossBackgrounding', () {
     setUp(() => lifecycle(const [AppLifecycleState.resumed]));
 
+    test(
+      'releases lifecycle listeners for every terminal result and error',
+      () async {
+        final initialListeners = binding.lifecycleListeners.length;
+        for (final status in pigeon.AuthStatus.values) {
+          final result = service.authenticate(
+            'r',
+            persistAcrossBackgrounding: true,
+          );
+          await settle();
+          calls.last.reply.complete(encode(status));
+          expect(
+            (await result).status,
+            SecureContentAuthStatus.values.byName(status.name),
+          );
+          expect(binding.lifecycleListeners.length, initialListeners);
+        }
+        final result = service.authenticate(
+          'r',
+          persistAcrossBackgrounding: true,
+        );
+        await settle();
+        calls.last.reply.complete(
+          codec.encodeMessage(<Object?>['native-error', 'boom', null]),
+        );
+        expect((await result).status, SecureContentAuthStatus.error);
+        expect(binding.lifecycleListeners.length, initialListeners);
+      },
+    );
+
+    test(
+      'waits for resume when the native interruption arrives first',
+      () async {
+        final result = service.authenticate(
+          'r',
+          persistAcrossBackgrounding: true,
+        );
+        await settle();
+        calls.single.reply.complete(interrupted());
+        await settle();
+        final callsBeforeResume = calls.length;
+        lifecycle([...toBackground, ...toForeground]);
+        await settle();
+        calls.last.reply.complete(encode(pigeon.AuthStatus.success));
+        expect((await result).isSuccess, isTrue);
+        expect(callsBeforeResume, 1);
+        expect(calls, hasLength(2));
+      },
+    );
+
+    test('each repeated interruption needs another resume', () async {
+      final result = service.authenticate(
+        'r',
+        persistAcrossBackgrounding: true,
+      );
+      await settle();
+      lifecycle([...toBackground, ...toForeground]);
+      calls.single.reply.complete(interrupted());
+      await settle();
+      expect(calls, hasLength(2));
+      calls.last.reply.complete(interrupted());
+      await settle();
+      final callsBeforeNextResume = calls.length;
+      lifecycle([...toBackground, ...toForeground]);
+      await settle();
+      calls.last.reply.complete(encode(pigeon.AuthStatus.failed));
+      expect(
+        await result,
+        const SecureContentAuthResult(SecureContentAuthStatus.failed),
+      );
+      expect(callsBeforeNextResume, 2);
+      expect(calls, hasLength(3));
+    });
+
+    test(
+      'does not retry after a resume followed by another background',
+      () async {
+        final result = service.authenticate(
+          'r',
+          persistAcrossBackgrounding: true,
+        );
+        await settle();
+        lifecycle(toBackground);
+        calls.single.reply.complete(interrupted());
+        await settle();
+        lifecycle([...toForeground, ...toBackground]);
+        await settle();
+        final callsWhileBackgrounded = calls.length;
+        lifecycle(toForeground);
+        await settle();
+        calls.last.reply.complete(encode(pigeon.AuthStatus.success));
+        expect((await result).isSuccess, isTrue);
+        expect(callsWhileBackgrounded, 1);
+        expect(calls, hasLength(2));
+      },
+    );
+
     test('reopens an interrupted prompt once the app is resumed', () async {
       final first = SecureContent.authenticate(
         reason: 'r',
@@ -278,6 +391,47 @@ void main() {
       expect((await first).isSuccess, isTrue);
       expect((await joined).isSuccess, isTrue);
     });
+
+    test(
+      'parked joined callers hold the gate before a fresh legacy prompt',
+      () async {
+        final first = service.authenticate(
+          'first',
+          persistAcrossBackgrounding: true,
+        );
+        await settle();
+        lifecycle(toBackground);
+        calls.single.reply.complete(interrupted());
+        await settle();
+        final joined = service.authenticate(
+          'joined',
+          persistAcrossBackgrounding: true,
+        );
+        final legacy = service.requestBiometricAuth('legacy');
+        final differentKey = service.authenticate(
+          'strict',
+          biometricOnly: true,
+        );
+        await settle();
+        expect(calls, hasLength(1));
+        expect(legacyCalls, 0);
+        lifecycle(toForeground);
+        await settle();
+        calls.last.reply.complete(encode(pigeon.AuthStatus.success));
+        expect((await first).isSuccess, isTrue);
+        expect((await joined).isSuccess, isTrue);
+        await settle();
+        expect(legacyCalls, 1);
+        expect(calls, hasLength(2));
+        service.emitLocalEvent(SecureContentEventType.biometricAuthFailed);
+        expect(await legacy, SecureContentEventType.biometricAuthFailed);
+        await settle();
+        expect(calls.last.biometricOnly, isTrue);
+        calls.last.reply.complete(encode(pigeon.AuthStatus.failed));
+        expect((await differentKey).status, SecureContentAuthStatus.failed);
+        expect(calls, hasLength(3));
+      },
+    );
 
     test('reopens at once when the app already came back', () async {
       final result = service.authenticate(

@@ -122,7 +122,10 @@ final class SecureContentAuthenticationTests: XCTestCase {
 
   func testOnlyASystemCancelWhileInactiveIsAnInterruption() {
     let cases: [(LAError.Code, Bool, Bool?)] = [
-      (.systemCancel, false, true), (.systemCancel, true, nil), (.userCancel, false, nil),
+      (.systemCancel, false, true), (.systemCancel, true, nil),
+      (.userCancel, false, nil), (.userCancel, true, nil),
+      (.appCancel, false, nil), (.appCancel, true, nil),
+      (.userFallback, false, nil), (.userFallback, true, nil),
     ]
     for (code, active, expected) in cases {
       let context = ControlledAuthenticationContext()
@@ -137,7 +140,44 @@ final class SecureContentAuthenticationTests: XCTestCase {
     }
   }
 
-    func testCapabilityReportsEnrolledBiometricsAndLockout() {
+  func testCancelledAndReplacedInterruptionCallbacksReplyOnlyOnce() {
+    let first = ControlledAuthenticationContext()
+    let second = ControlledAuthenticationContext()
+    var nextContext: LAContext = first
+    let authentication = SecureContentAuthentication(
+      contextProvider: { nextContext }, appIsActive: { false })
+    var firstResults: [AuthResult] = []
+    var secondResults: [AuthResult] = []
+    authentication.authenticate(reason: "1", biometricOnly: true) { firstResults.append($0) }
+    first.complete(success: false, error: LAError(.systemCancel))
+
+    nextContext = second
+    authentication.authenticate(reason: "2", biometricOnly: true) { secondResults.append($0) }
+    second.complete(success: false, error: LAError(.systemCancel))
+    second.complete(success: false, error: LAError(.systemCancel))
+    drainMainQueue()
+
+    XCTAssertEqual(firstResults, [AuthResult(status: .canceled)])
+    XCTAssertEqual(secondResults.map(\.status), [.canceled])
+    XCTAssertEqual(secondResults.map(\.interrupted), [true])
+    XCTAssertNil(authentication.context)
+  }
+
+  func testQueuedInterruptionCannotOverrideExplicitCancel() {
+    let context = ControlledAuthenticationContext()
+    let authentication = SecureContentAuthentication(
+      contextProvider: { context }, appIsActive: { false })
+    var results: [AuthResult] = []
+    authentication.authenticate(reason: "r", biometricOnly: true) { results.append($0) }
+    context.complete(success: false, error: LAError(.systemCancel))
+    authentication.cancel()
+    drainMainQueue()
+
+    XCTAssertEqual(results, [AuthResult(status: .canceled)])
+    XCTAssertNil(authentication.context)
+  }
+
+  func testCapabilityReportsEnrolledBiometricsAndLockout() {
     let context = ControlledAuthenticationContext()
     let authentication = SecureContentAuthentication(contextProvider: { context })
     XCTAssertTrue(authentication.biometricCapability().isAvailable)
