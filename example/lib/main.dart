@@ -49,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Biometrics only: the prompt never offers the device passcode or PIN.
   Future<void> _biometricOnlyUnlock() async {
     final capability = await SecureContent.getBiometricCapability();
+    if (!mounted) return;
     if (!capability.isAvailable) {
       setState(() => _unlockResult = 'No biometric enrolled');
       return;

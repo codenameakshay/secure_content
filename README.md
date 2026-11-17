@@ -160,7 +160,10 @@ phone cannot use the passcode to get in:
   `local_auth` with `biometricOnly: true`.
 
 With the default `biometricOnly: false`, the prompt also accepts the device
-credential, as `requestBiometricAuth` and `SecureContentScope` do.
+credential where the platform allows it, as `requestBiometricAuth` and
+`SecureContentScope` do. On Android this needs API 30+ with a
+`FragmentActivity`, or API 29+ with a plain `Activity`; older versions accept
+only a biometric.
 
 | Status | Meaning |
 | ------ | ------- |
