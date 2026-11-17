@@ -39,7 +39,9 @@ class SecureContent {
   /// With [biometricOnly], the prompt accepts only a biometric (Face ID,
   /// Touch ID, or an Android class 2 or 3 biometric) and never offers the
   /// device passcode, PIN, or pattern. By default the device credential is
-  /// accepted too, as with [requestBiometricAuth].
+  /// also accepted where supported. On Android, credentials are supported
+  /// with a `FragmentActivity` on API 30+ or a plain Activity on API 29+;
+  /// lower Android versions retain the legacy biometric-only behavior.
   ///
   /// Calls share one prompt while it is up, unless their [biometricOnly]
   /// values differ. This prompt emits no biometric events on [events].
@@ -55,8 +57,11 @@ class SecureContent {
     return _service.getBiometricCapability();
   }
 
-  /// Shows a prompt that accepts a biometric or the device credential, and
-  /// reports the outcome only as a biometric event on [events]. Use
+  /// Shows a prompt that accepts a biometric or, where supported, the device
+  /// credential, and reports the outcome only as a biometric event on
+  /// [events]. On Android, credentials are supported with a `FragmentActivity`
+  /// on API 30+ or a plain Activity on API 29+; lower versions retain the
+  /// legacy biometric-only behavior. Use
   /// [authenticate] to get the outcome directly.
   static Future<void> requestBiometricAuth({
     String reason = 'Authenticate to continue',

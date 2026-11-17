@@ -797,6 +797,138 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
+    fun busyTypedAuthenticateDoesNotRemoveLegacyPromptsLaunchCover() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val activity = controller.get()
+        plugin.onAttachedToActivity(activityBinding(activity))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        controller.visible()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+
+        plugin.requestBiometricAuth("Legacy prompt")
+        val prompt = ShadowBiometricPrompt.getCurrentPrompt()
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        val cover = decor.children().single { it !in hostChildren }
+        val busyResults = mutableListOf<AuthResult>()
+
+        plugin.authenticate("Busy typed request", true) { busyResults.add(it.getOrThrow()) }
+
+        assertSame(prompt, ShadowBiometricPrompt.getCurrentPrompt())
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertSame(cover, decor.children().single { it !in hostChildren })
+        assertEquals(listOf(AuthStatus.ERROR), busyResults.map { it.status })
+        assertEquals(1, busyResults.size)
+        assertEquals(listOf("platformReady", "appSwitcherProtected"), messenger.eventTypes)
+
+        currentPromptCallback().onAuthenticationSucceeded(null)
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected", "biometricAuthSucceeded"), messenger.eventTypes)
+        assertEquals(1, busyResults.size)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun busyTypedAuthenticateDoesNotRemoveTypedPromptsLaunchCover() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
+        val activity = controller.get()
+        plugin.onAttachedToActivity(activityBinding(activity))
+        plugin.configureProtection(ProtectionConfig(true, true, 0xff123456))
+        controller.visible()
+        val decor = activity.window.decorView as ViewGroup
+        val hostChildren = decor.children()
+        val firstResults = mutableListOf<AuthResult>()
+        val busyResults = mutableListOf<AuthResult>()
+
+        plugin.authenticate("Typed prompt", true) { firstResults.add(it.getOrThrow()) }
+        val prompt = ShadowBiometricPrompt.getCurrentPrompt()
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        val cover = decor.children().single { it !in hostChildren }
+
+        plugin.authenticate("Busy typed request", true) { busyResults.add(it.getOrThrow()) }
+
+        assertSame(prompt, ShadowBiometricPrompt.getCurrentPrompt())
+        assertEquals(hostChildren.size + 1, decor.childCount)
+        assertSame(cover, decor.children().single { it !in hostChildren })
+        assertEquals(listOf(AuthStatus.ERROR), busyResults.map { it.status })
+        assertEquals(1, busyResults.size)
+        assertTrue(firstResults.isEmpty())
+        assertEquals(emptyList<String>(), messenger.eventTypes.filter { it.startsWith("biometric") })
+
+        currentPromptCallback().onAuthenticationSucceeded(null)
+
+        assertEquals(hostChildren, decor.children())
+        assertEquals(listOf(AuthStatus.SUCCESS), firstResults.map { it.status })
+        assertEquals(1, busyResults.size)
+        assertEquals(listOf("platformReady", "appSwitcherProtected", "appSwitcherUnprotected"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    @Config(sdk = [35, 36])
+    fun frameworkTypedAuthenticateReportsTerminalLockoutWhenPreflightReturnsHiddenCodeSeven() {
+        setFrameworkBiometricPreflightResult(7)
+        plugin.onAttachedToActivity(activityBinding(activity()))
+
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+
+        assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+        assertTrue(results.isEmpty())
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT, "Locked temporarily")
+
+        assertEquals(listOf(AuthResult(AuthStatus.TEMPORARY_LOCKOUT, "Locked temporarily")), results)
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    @Config(sdk = [35, 36])
+    fun androidXTypedAuthenticateReportsTerminalPermanentLockoutWhenPreflightReturnsHiddenCodeSeven() {
+        setFrameworkBiometricPreflightResult(7)
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+        assertTrue(results.isEmpty())
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT_PERMANENT, "Locked permanently")
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(listOf(AuthResult(AuthStatus.PERMANENT_LOCKOUT, "Locked permanently")), results)
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    @Config(sdk = [35, 36])
+    fun capabilityTreatsHiddenCodeSevenAsAvailableToResolveLockoutAtPrompt() {
+        setFrameworkBiometricPreflightResult(7)
+        plugin.onAttachedToActivity(activityBinding(activity()))
+
+        assertTrue(plugin.getBiometricCapability().isAvailable)
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    @Config(sdk = [35, 36])
+    fun legacyRequestStillReportsUnavailableWhenPreflightReturnsHiddenCodeSeven() {
+        setFrameworkBiometricPreflightResult(7)
+        plugin.onAttachedToActivity(activityBinding(activity()))
+
+        plugin.requestBiometricAuth("Legacy unlock")
+
+        assertNull(ShadowBiometricPrompt.getCurrentPrompt())
+        assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
     fun promptCoverFollowsProtectionConfigurationAndEndsWithItsPrompt() {
         val controller = Robolectric.buildActivity(Activity::class.java).create().start().resume()
         val activity = controller.get()
@@ -1347,6 +1479,13 @@ class SecureContentPluginLifecycleTest {
             it.setIsHardwareDetected(true)
             it.setDefaultFingerprints(1)
         }
+    }
+
+    private fun setFrameworkBiometricPreflightResult(result: Int) {
+        val biometricManager = Shadow.extract<ShadowBiometricManager>(
+            application.getSystemService(android.hardware.biometrics.BiometricManager::class.java),
+        )
+        biometricManager.setAuthenticatorType(result)
     }
 
     private fun activity(): Activity = Robolectric.buildActivity(Activity::class.java).setup().get()

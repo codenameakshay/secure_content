@@ -81,7 +81,8 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
             return
         }
         val availability = BiometricManager.from(activity).canAuthenticate(authenticators)
-        if (availability != BiometricManager.BIOMETRIC_SUCCESS) {
+        val lockoutDuringMandatoryBiometrics = isLockoutAvailability(availability)
+        if (availability != BiometricManager.BIOMETRIC_SUCCESS && !(reply != null && lockoutDuringMandatoryBiometrics)) {
             reject(NativeEvent.BIOMETRIC_UNAVAILABLE, authStatusForAvailability(availability))
             return
         }
@@ -120,15 +121,20 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     }
 
     fun capability(context: Context): BiometricCapability {
-        val available = BiometricManager.from(context)
-            .canAuthenticate(allowedAuthenticators(biometricOnly = true, supportsCredentials = false)) ==
-            BiometricManager.BIOMETRIC_SUCCESS
+        val availability = BiometricManager.from(context)
+            .canAuthenticate(allowedAuthenticators(biometricOnly = true, supportsCredentials = false))
+        val available = availability == BiometricManager.BIOMETRIC_SUCCESS ||
+            isLockoutAvailability(availability)
         val types = biometryTypes(context.packageManager)
         return BiometricCapability(
             available,
             if (available && types.isEmpty()) listOf(BiometryType.UNKNOWN) else types,
         )
     }
+
+    /** Android 15 QPR and later report the lockout code from `canAuthenticate` for mandatory biometrics. */
+    private fun isLockoutAvailability(availability: Int): Boolean =
+        Build.VERSION.SDK_INT >= 35 && availability == AndroidXBiometricPrompt.ERROR_LOCKOUT
 
     fun onActivityAttached(activity: Activity) {
         val fragmentActivity = activity as? FragmentActivity ?: return

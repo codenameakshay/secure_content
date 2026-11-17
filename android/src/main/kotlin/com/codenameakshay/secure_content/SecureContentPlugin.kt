@@ -91,9 +91,10 @@ class SecureContentPlugin : FlutterPlugin, SecureContentHostApi, ActivityAware {
     }
 
     override fun authenticate(reason: String, biometricOnly: Boolean, callback: (Result<AuthResult>) -> Unit) {
+        val alreadyCovered = launchPromptCover
         coverLaunchPrompt()
         biometricAuthentication.request(activity, reason, biometricOnly) { result ->
-            endLaunchPromptCover()
+            if (!alreadyCovered) endLaunchPromptCover()
             callback(Result.success(result))
         }
     }
