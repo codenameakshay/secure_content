@@ -244,14 +244,18 @@ class SecureEvent {
 }
 
 class AuthResult {
-  AuthResult({required this.status, this.message});
+  AuthResult({required this.status, this.message, this.interrupted});
 
   AuthStatus status;
 
   String? message;
 
+  /// True when the system closed the prompt because the app lost the
+  /// foreground, not because the person canceled it.
+  bool? interrupted;
+
   List<Object?> _toList() {
-    return <Object?>[status, message];
+    return <Object?>[status, message, interrupted];
   }
 
   Object encode() {
@@ -263,6 +267,7 @@ class AuthResult {
     return AuthResult(
       status: result[0]! as AuthStatus,
       message: result[1] as String?,
+      interrupted: result[2] as bool?,
     );
   }
 
@@ -276,7 +281,8 @@ class AuthResult {
       return true;
     }
     return _deepEquals(status, other.status) &&
-        _deepEquals(message, other.message);
+        _deepEquals(message, other.message) &&
+        _deepEquals(interrupted, other.interrupted);
   }
 
   @override
@@ -285,7 +291,7 @@ class AuthResult {
 
   @override
   String toString() {
-    return 'AuthResult(status: $status, message: $message)';
+    return 'AuthResult(status: $status, message: $message, interrupted: $interrupted)';
   }
 }
 

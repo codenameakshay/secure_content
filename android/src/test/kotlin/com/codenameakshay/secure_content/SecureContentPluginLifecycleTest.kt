@@ -44,6 +44,9 @@ import org.robolectric.shadow.api.Shadow
 import org.robolectric.util.ReflectionHelpers
 import androidx.biometric.BiometricManager
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import java.lang.reflect.Proxy
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
@@ -601,6 +604,21 @@ class SecureContentPluginLifecycleTest {
 
         assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
         assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun aSystemCancelAfterTheHostLeftTheForegroundIsReportedAsAnInterruption() {
+        val activity = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        activity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onAttachedToActivity(activityBinding(activity))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+
+        activity.registry.currentState = Lifecycle.State.CREATED
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_CANCELED, "Canceled")
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true)), results)
         plugin.onDetachedFromEngine(binding)
     }
 
@@ -1515,6 +1533,12 @@ class SecureContentPluginLifecycleTest {
         companion object {
             var onCreateHook: ((Activity) -> Unit)? = null
         }
+    }
+
+    /** Like FlutterActivity: a plain Activity that is a LifecycleOwner. */
+    class LifecycleOwnerActivity : Activity(), LifecycleOwner {
+        val registry = LifecycleRegistry.createUnsafe(this)
+        override val lifecycle: Lifecycle get() = registry
     }
 
     class UnavailableExecutorActivity : Activity() {

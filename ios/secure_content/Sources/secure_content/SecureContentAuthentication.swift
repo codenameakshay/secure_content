@@ -1,4 +1,5 @@
 import LocalAuthentication
+import UIKit
 
 @MainActor
 final class SecureContentAuthentication {
@@ -7,9 +8,16 @@ final class SecureContentAuthentication {
   private var completion: ((_ success: Bool, _ code: LAError.Code?, _ message: String?) -> Void)?
   private var onCancel: (() -> Void)?
   private let contextProvider: @MainActor () -> LAContext
+  private let appIsActive: @MainActor () -> Bool
 
-  init(contextProvider: @escaping @MainActor () -> LAContext = LAContext.init) {
+  init(
+    contextProvider: @escaping @MainActor () -> LAContext = LAContext.init,
+    appIsActive: @escaping @MainActor () -> Bool = {
+      UIApplication.shared.applicationState == .active
+    }
+  ) {
     self.contextProvider = contextProvider
+    self.appIsActive = appIsActive
   }
 
   /// Accepts a biometric or the device passcode, and reports a coarse event.
@@ -34,11 +42,14 @@ final class SecureContentAuthentication {
         reply(AuthResult(status: Self.status(for: code, unavailable: true), message: message))
       },
       onCancel: { reply(AuthResult(status: .canceled)) }
-    ) { success, code, message in
+    ) { [weak self] success, code, message in
+      guard !success else { return reply(AuthResult(status: .success)) }
+      // The system closes the prompt when the app leaves the foreground.
+      let interrupted = code == .systemCancel && self?.appIsActive() == false
       reply(
-        success
-          ? AuthResult(status: .success)
-          : AuthResult(status: Self.status(for: code, unavailable: false), message: message))
+        AuthResult(
+          status: Self.status(for: code, unavailable: false), message: message,
+          interrupted: interrupted ? true : nil))
     }
   }
 

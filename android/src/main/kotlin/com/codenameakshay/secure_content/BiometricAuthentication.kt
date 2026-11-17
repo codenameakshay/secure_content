@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import com.codenameakshay.secure_content.pigeon.AuthResult
 import com.codenameakshay.secure_content.pigeon.AuthStatus
 import com.codenameakshay.secure_content.pigeon.BiometricCapability
@@ -167,10 +168,20 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     }
 
     /** Answers the pending [request]: its reply when it has one, otherwise an event. */
-    private fun respond(event: NativeEvent, status: AuthStatus, emitEvent: Boolean = true, message: String? = null) {
+    private fun respond(
+        event: NativeEvent,
+        status: AuthStatus,
+        emitEvent: Boolean = true,
+        message: String? = null,
+        interrupted: Boolean = false,
+    ) {
         val reply = pendingReply
         pendingReply = null
-        if (reply != null) reply(AuthResult(status, message)) else if (emitEvent) onEvent(event)
+        if (reply != null) {
+            reply(AuthResult(status, message, if (interrupted) true else null))
+        } else if (emitEvent) {
+            onEvent(event)
+        }
     }
 
     private fun requestAndroidX(
@@ -189,7 +200,13 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED, authStatusForError(errorCode), errString.toString())
+                    finish(
+                        requestGeneration,
+                        NativeEvent.BIOMETRIC_FAILED,
+                        authStatusForError(errorCode),
+                        errString.toString(),
+                        isInterruption(errorCode, ownedActivity),
+                    )
                 }
             },
         )
@@ -227,13 +244,25 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
-                    finish(requestGeneration, NativeEvent.BIOMETRIC_FAILED, authStatusForError(errorCode), errString?.toString())
+                    finish(
+                        requestGeneration,
+                        NativeEvent.BIOMETRIC_FAILED,
+                        authStatusForError(errorCode),
+                        errString?.toString(),
+                        isInterruption(errorCode, ownedActivity),
+                    )
                 }
             },
         )
     }
 
-    private fun finish(requestGeneration: Long, event: NativeEvent, status: AuthStatus, message: String? = null) {
+    private fun finish(
+        requestGeneration: Long,
+        event: NativeEvent,
+        status: AuthStatus,
+        message: String? = null,
+        interrupted: Boolean = false,
+    ) {
         if (requestGeneration != generation) return
         generation += 1
         val wasCanceled = cancellationPending
@@ -242,7 +271,7 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
         val reply = pendingReply
         releaseOwnership()
         pendingReply = reply
-        if (!wasCanceled) respond(event, status, message = message)
+        if (!wasCanceled) respond(event, status, message = message, interrupted = interrupted)
     }
 
     private fun releaseOwnership() {
@@ -356,6 +385,14 @@ internal fun authStatusForError(errorCode: Int): AuthStatus = when (errorCode) {
     -> AuthStatus.NOT_AVAILABLE
     else -> AuthStatus.ERROR
 }
+
+/**
+ * The system cancels the prompt when its host leaves the foreground. A host that is not a
+ * [LifecycleOwner] is treated as in the foreground, so its cancels stay plain cancels.
+ */
+internal fun isInterruption(errorCode: Int, host: Any?): Boolean =
+    errorCode == AndroidXBiometricPrompt.ERROR_CANCELED &&
+        (host as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == false
 
 /** Maps a failed [BiometricManager.canAuthenticate] result. */
 internal fun authStatusForAvailability(result: Int): AuthStatus = when (result) {

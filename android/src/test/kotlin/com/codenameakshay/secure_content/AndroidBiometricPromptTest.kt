@@ -2,6 +2,11 @@ package com.codenameakshay.secure_content
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import com.codenameakshay.secure_content.pigeon.AuthStatus
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -66,5 +71,19 @@ class AndroidBiometricPromptTest {
         assertEquals(AuthStatus.NOT_ENROLLED, authStatusForAvailability(BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED))
         assertEquals(AuthStatus.NOT_AVAILABLE, authStatusForAvailability(BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE))
         assertEquals(AuthStatus.NOT_AVAILABLE, authStatusForAvailability(BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE))
+    }
+
+    @Test
+    fun onlyACancelWhileTheHostIsNotResumedIsAnInterruption() {
+        val host = object : LifecycleOwner {
+            val registry = LifecycleRegistry.createUnsafe(this)
+            override val lifecycle: Lifecycle get() = registry
+        }
+        host.registry.currentState = Lifecycle.State.RESUMED
+        assertFalse(isInterruption(BiometricPrompt.ERROR_CANCELED, host))
+        host.registry.currentState = Lifecycle.State.CREATED
+        assertTrue(isInterruption(BiometricPrompt.ERROR_CANCELED, host))
+        assertFalse(isInterruption(BiometricPrompt.ERROR_USER_CANCELED, host))
+        assertFalse(isInterruption(BiometricPrompt.ERROR_CANCELED, Any()))
     }
 }

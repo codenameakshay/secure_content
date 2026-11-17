@@ -310,39 +310,46 @@ struct SecureEvent: Hashable, CustomStringConvertible {
 struct AuthResult: Hashable, CustomStringConvertible {
   var status: AuthStatus
   var message: String? = nil
+  /// True when the system closed the prompt because the app lost the
+  /// foreground, not because the person canceled it.
+  var interrupted: Bool? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> AuthResult? {
     let status = pigeonVar_list[0] as! AuthStatus
     let message: String? = nilOrValue(pigeonVar_list[1])
+    let interrupted: Bool? = nilOrValue(pigeonVar_list[2])
 
     return AuthResult(
       status: status,
-      message: message
+      message: message,
+      interrupted: interrupted
     )
   }
   func toList() -> [Any?] {
     return [
       status,
       message,
+      interrupted,
     ]
   }
   static func == (lhs: AuthResult, rhs: AuthResult) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return SecureContentApiPigeonInternal.deepEquals(lhs.status, rhs.status) && SecureContentApiPigeonInternal.deepEquals(lhs.message, rhs.message)
+    return SecureContentApiPigeonInternal.deepEquals(lhs.status, rhs.status) && SecureContentApiPigeonInternal.deepEquals(lhs.message, rhs.message) && SecureContentApiPigeonInternal.deepEquals(lhs.interrupted, rhs.interrupted)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("AuthResult")
     SecureContentApiPigeonInternal.deepHash(value: status, hasher: &hasher)
     SecureContentApiPigeonInternal.deepHash(value: message, hasher: &hasher)
+    SecureContentApiPigeonInternal.deepHash(value: interrupted, hasher: &hasher)
   }
 
   public var description: String {
-    return "AuthResult(status: \(String(describing: status)), message: \(String(describing: message)))"
+    return "AuthResult(status: \(String(describing: status)), message: \(String(describing: message)), interrupted: \(String(describing: interrupted)))"
   }
 }
 

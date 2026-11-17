@@ -53,10 +53,14 @@ enum AuthStatus {
 }
 
 class AuthResult {
-  AuthResult({required this.status, this.message});
+  AuthResult({required this.status, this.message, this.interrupted});
 
   final AuthStatus status;
   final String? message;
+
+  /// True when the system closed the prompt because the app lost the
+  /// foreground, not because the person canceled it.
+  final bool? interrupted;
 }
 
 enum BiometryType { face, fingerprint, iris, unknown }

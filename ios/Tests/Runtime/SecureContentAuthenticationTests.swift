@@ -120,7 +120,24 @@ final class SecureContentAuthenticationTests: XCTestCase {
     XCTAssertEqual(secondResults, [AuthResult(status: .canceled)])
   }
 
-  func testCapabilityReportsEnrolledBiometricsAndLockout() {
+  func testOnlyASystemCancelWhileInactiveIsAnInterruption() {
+    let cases: [(LAError.Code, Bool, Bool?)] = [
+      (.systemCancel, false, true), (.systemCancel, true, nil), (.userCancel, false, nil),
+    ]
+    for (code, active, expected) in cases {
+      let context = ControlledAuthenticationContext()
+      let authentication = SecureContentAuthentication(
+        contextProvider: { context }, appIsActive: { active })
+      var results: [AuthResult] = []
+      authentication.authenticate(reason: "r", biometricOnly: true) { results.append($0) }
+      context.complete(success: false, error: LAError(code))
+      drainMainQueue()
+      XCTAssertEqual(results.map(\.status), [.canceled], "\(code) active=\(active)")
+      XCTAssertEqual(results.map(\.interrupted), [expected], "\(code) active=\(active)")
+    }
+  }
+
+    func testCapabilityReportsEnrolledBiometricsAndLockout() {
     let context = ControlledAuthenticationContext()
     let authentication = SecureContentAuthentication(contextProvider: { context })
     XCTAssertTrue(authentication.biometricCapability().isAvailable)

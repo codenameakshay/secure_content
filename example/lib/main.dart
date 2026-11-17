@@ -63,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await SecureContent.authenticate(
       reason: 'Unlock with your $label',
       biometricOnly: true,
+      persistAcrossBackgrounding: true,
     );
     if (mounted) {
       setState(() {

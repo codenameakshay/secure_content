@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'secure_content_auth.dart';
 import 'secure_content_event.dart';
+import 'pigeon/secure_content_api.g.dart' as pigeon;
 import 'secure_content_platform.dart';
 
 class SecureContentService {
@@ -38,7 +39,7 @@ class SecureContentService {
   StreamSubscription<SecureContentEvent>? _biometricResultSubscription;
 
   Future<SecureContentAuthResult>? _authRequest;
-  bool _authRequestBiometricOnly = false;
+  ({bool biometricOnly, bool persist})? _authRequestKey;
 
   Stream<SecureContentEvent> get events => _eventsController.stream;
 
@@ -113,22 +114,31 @@ class SecureContentService {
   /// With [biometricOnly], the prompt accepts only a biometric and never
   /// offers the device passcode, PIN, or pattern.
   ///
+  /// With [persistAcrossBackgrounding], a prompt that the system closes
+  /// because the app lost the foreground opens again when the app is resumed,
+  /// and this call returns that prompt's result.
+  ///
   /// One prompt runs at a time. A call made while a prompt with the same
-  /// [biometricOnly] value is up shares that prompt and its result. Any other
-  /// call waits until the current prompt closes, then opens its own, so a
-  /// prompt that accepts the passcode never answers a biometric-only call.
+  /// options is up shares that prompt and its result. Any other call waits
+  /// until the current prompt closes, then opens its own, so a prompt that
+  /// accepts the passcode never answers a biometric-only call.
   Future<SecureContentAuthResult> authenticate(
     String reason, {
     bool biometricOnly = false,
+    bool persistAcrossBackgrounding = false,
   }) async {
     if (!_platform.isSupportedPlatform) {
       return const SecureContentAuthResult(
         SecureContentAuthStatus.notAvailable,
       );
     }
+    final key = (
+      biometricOnly: biometricOnly,
+      persist: persistAcrossBackgrounding,
+    );
     while (true) {
       final auth = _authRequest;
-      if (auth != null && _authRequestBiometricOnly == biometricOnly) {
+      if (auth != null && _authRequestKey == key) {
         return auth;
       }
       // Neither future completes with an error.
@@ -137,23 +147,56 @@ class SecureContentService {
       await busy;
     }
 
-    final request = _platform
-        .authenticate(reason, biometricOnly: biometricOnly)
-        .then(
-          SecureContentAuthResult.fromPigeon,
-          onError: (Object error) => SecureContentAuthResult(
-            SecureContentAuthStatus.error,
-            message: '$error',
-          ),
-        );
+    final request = _prompt(reason, key);
     _authRequest = request;
-    _authRequestBiometricOnly = biometricOnly;
+    _authRequestKey = key;
     unawaited(
       request.whenComplete(() {
         if (identical(_authRequest, request)) _authRequest = null;
       }),
     );
     return request;
+  }
+
+  Future<SecureContentAuthResult> _prompt(
+    String reason,
+    ({bool biometricOnly, bool persist}) key,
+  ) async {
+    while (true) {
+      final pigeon.AuthResult reply;
+      try {
+        reply = await _platform.authenticate(
+          reason,
+          biometricOnly: key.biometricOnly,
+        );
+      } catch (error) {
+        return SecureContentAuthResult(
+          SecureContentAuthStatus.error,
+          message: '$error',
+        );
+      }
+      if (!key.persist || reply.interrupted != true) {
+        return SecureContentAuthResult.fromPigeon(reply);
+      }
+      await _resumed();
+    }
+  }
+
+  /// Completes once the app is in the foreground. Lifecycle changes reach Dart
+  /// before a later native reply, so a resumed state here is current.
+  Future<void> _resumed() {
+    if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      return Future<void>.value();
+    }
+    final resumed = Completer<void>();
+    late final AppLifecycleListener listener;
+    listener = AppLifecycleListener(
+      onResume: () {
+        listener.dispose();
+        resumed.complete();
+      },
+    );
+    return resumed.future;
   }
 
   Future<SecureContentBiometricCapability> getBiometricCapability() async {

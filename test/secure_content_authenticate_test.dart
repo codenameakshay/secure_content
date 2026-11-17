@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secure_content/secure_content.dart';
 import 'package:secure_content/src/pigeon/secure_content_api.g.dart' as pigeon;
@@ -25,6 +26,27 @@ void main() {
       codec.encodeMessage(<Object?>[
         pigeon.AuthResult(status: status, message: message),
       ]);
+
+  ByteData? interrupted() => codec.encodeMessage(<Object?>[
+    pigeon.AuthResult(status: pigeon.AuthStatus.canceled, interrupted: true),
+  ]);
+
+  void lifecycle(List<AppLifecycleState> states) {
+    for (final state in states) {
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(state);
+    }
+  }
+
+  const toBackground = <AppLifecycleState>[
+    AppLifecycleState.inactive,
+    AppLifecycleState.hidden,
+    AppLifecycleState.paused,
+  ];
+  const toForeground = <AppLifecycleState>[
+    AppLifecycleState.hidden,
+    AppLifecycleState.inactive,
+    AppLifecycleState.resumed,
+  ];
 
   setUp(() {
     SecureContentPlatform.debugIsSupportedPlatformOverride = true;
@@ -224,6 +246,101 @@ void main() {
           SecureContentBiometryType.unknown,
         ],
       ),
+    );
+  });
+
+  group('persistAcrossBackgrounding', () {
+    setUp(() => lifecycle(const [AppLifecycleState.resumed]));
+
+    test('reopens an interrupted prompt once the app is resumed', () async {
+      final first = SecureContent.authenticate(
+        reason: 'r',
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+      final joined = service.authenticate(
+        'r',
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+      await settle();
+      lifecycle(toBackground);
+      calls.single.reply.complete(interrupted());
+      await settle();
+      expect(calls, hasLength(1), reason: 'waits while in the background');
+
+      lifecycle(toForeground);
+      await settle();
+      expect(calls, hasLength(2));
+      expect(calls.last.biometricOnly, isTrue);
+      calls.last.reply.complete(encode(pigeon.AuthStatus.success));
+
+      expect((await first).isSuccess, isTrue);
+      expect((await joined).isSuccess, isTrue);
+    });
+
+    test('reopens at once when the app already came back', () async {
+      final result = service.authenticate(
+        'r',
+        persistAcrossBackgrounding: true,
+      );
+      await settle();
+      lifecycle([...toBackground, ...toForeground]);
+      calls.single.reply.complete(interrupted());
+      await settle();
+      expect(calls, hasLength(2));
+      calls.last.reply.complete(encode(pigeon.AuthStatus.failed));
+      expect(
+        await result,
+        const SecureContentAuthResult(SecureContentAuthStatus.failed),
+      );
+    });
+
+    test('a cancel by the person is never reopened', () async {
+      final result = service.authenticate(
+        'r',
+        persistAcrossBackgrounding: true,
+      );
+      await settle();
+      calls.single.reply.complete(encode(pigeon.AuthStatus.canceled));
+      expect(
+        await result,
+        const SecureContentAuthResult(SecureContentAuthStatus.canceled),
+      );
+      expect(calls, hasLength(1));
+    });
+
+    test('without the option an interruption returns canceled', () async {
+      final result = service.authenticate('r');
+      await settle();
+      lifecycle(toBackground);
+      calls.single.reply.complete(interrupted());
+      expect(
+        await result,
+        const SecureContentAuthResult(SecureContentAuthStatus.canceled),
+      );
+      lifecycle(toForeground);
+      await settle();
+      expect(calls, hasLength(1));
+    });
+
+    test(
+      'calls with a different persist value do not share a prompt',
+      () async {
+        final sticky = service.authenticate(
+          'r',
+          persistAcrossBackgrounding: true,
+        );
+        final plain = service.authenticate('r');
+        await settle();
+        expect(calls, hasLength(1));
+        calls.single.reply.complete(encode(pigeon.AuthStatus.success));
+        await sticky;
+        await settle();
+        expect(calls, hasLength(2));
+        calls.last.reply.complete(encode(pigeon.AuthStatus.success));
+        expect((await plain).isSuccess, isTrue);
+      },
     );
   });
 }

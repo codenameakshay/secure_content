@@ -329,20 +329,27 @@ data class SecureEvent (
 /** Generated class from Pigeon that represents data sent in messages. */
 data class AuthResult (
   val status: AuthStatus,
-  val message: String? = null
+  val message: String? = null,
+  /**
+   * True when the system closed the prompt because the app lost the
+   * foreground, not because the person canceled it.
+   */
+  val interrupted: Boolean? = null
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): AuthResult {
       val status = pigeonVar_list[0] as AuthStatus
       val message = pigeonVar_list[1] as String?
-      return AuthResult(status, message)
+      val interrupted = pigeonVar_list[2] as Boolean?
+      return AuthResult(status, message, interrupted)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       status,
       message,
+      interrupted,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -353,17 +360,18 @@ data class AuthResult (
       return true
     }
     val other = other as AuthResult
-    return SecureContentApiPigeonUtils.deepEquals(this.status, other.status) && SecureContentApiPigeonUtils.deepEquals(this.message, other.message)
+    return SecureContentApiPigeonUtils.deepEquals(this.status, other.status) && SecureContentApiPigeonUtils.deepEquals(this.message, other.message) && SecureContentApiPigeonUtils.deepEquals(this.interrupted, other.interrupted)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
     result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.status)
     result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.message)
+    result = 31 * result + SecureContentApiPigeonUtils.deepHash(this.interrupted)
     return result
   }
   override fun toString(): String {
-    return "AuthResult(status=$status, message=$message)"
+    return "AuthResult(status=$status, message=$message, interrupted=$interrupted)"
   }
 }
 

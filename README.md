@@ -132,6 +132,7 @@ if (capability.isAvailable) {
   final result = await SecureContent.authenticate(
     reason: usesFace ? 'Unlock with Face ID' : 'Unlock with your fingerprint',
     biometricOnly: true,
+    persistAcrossBackgrounding: true,
   );
   switch (result.status) {
     case SecureContentAuthStatus.success:
@@ -177,8 +178,15 @@ only a biometric.
 | `notAvailable` | Authentication cannot run on this device or platform. |
 | `error` | Any other error. `result.message` has the platform description. |
 
+With `persistAcrossBackgrounding: true`, a prompt that the system closes
+because the app lost the foreground (the person switched apps, or a call or
+Control Center covered it) opens again when the app is resumed. The returned
+future then completes with that prompt's result. Without it, such a prompt
+returns `canceled`. A cancel by the person always returns `canceled`. This
+matches `local_auth`'s `persistAcrossBackgrounding`.
+
 Only one prompt runs at a time. Calls made while a prompt is up share it when
-their `biometricOnly` values match. Otherwise a call waits for the current
+their options match. Otherwise a call waits for the current
 prompt to close, then opens its own, so a prompt that accepts the passcode
 never answers a biometric-only call. `authenticate` emits no biometric events
 on `SecureContent.events`.

@@ -43,13 +43,25 @@ class SecureContent {
   /// with a `FragmentActivity` on API 30+ or a plain Activity on API 29+;
   /// lower Android versions retain the legacy biometric-only behavior.
   ///
-  /// Calls share one prompt while it is up, unless their [biometricOnly]
-  /// values differ. This prompt emits no biometric events on [events].
+  /// With [persistAcrossBackgrounding], a prompt that the system closes
+  /// because the app lost the foreground (the person switched apps, or a call
+  /// or Control Center covered it) opens again when the app is resumed, and
+  /// the returned future completes with that prompt's result. Without it, such
+  /// a prompt returns [SecureContentAuthStatus.canceled]. A cancel by the
+  /// person always returns [SecureContentAuthStatus.canceled].
+  ///
+  /// Calls share one prompt while it is up, unless their options differ.
+  /// This prompt emits no biometric events on [events].
   static Future<SecureContentAuthResult> authenticate({
     required String reason,
     bool biometricOnly = false,
+    bool persistAcrossBackgrounding = false,
   }) {
-    return _service.authenticate(reason, biometricOnly: biometricOnly);
+    return _service.authenticate(
+      reason,
+      biometricOnly: biometricOnly,
+      persistAcrossBackgrounding: persistAcrossBackgrounding,
+    );
   }
 
   /// Whether biometrics are enrolled, and which sensors the device has.
