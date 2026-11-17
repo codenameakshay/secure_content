@@ -40,4 +40,7 @@ flutter {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.8.0'
+    // Host apps often get a newer AndroidX Core from other plugins. The plugin must not force
+    // one version on them; CI's example APK build fails if it does.
+    implementation 'androidx.core:core:1.19.1'
 }

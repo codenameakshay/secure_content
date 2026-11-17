@@ -3,18 +3,20 @@ plugins {
 }
 
 group 'com.codenameakshay.secure_content'
-version '3.1.0'
+version '3.1.1'
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.8.0'
-    implementation 'androidx.biometric:biometric:1.1.0'
-    implementation('androidx.core:core') {
-        because 'Core 1.18+ removes fingerprint authentication required by Biometric 1.1 on API 23-27'
-        version {
-            strictly '1.17.0'
-        }
-    }
+    // 1.4.0-alpha07 is the newest release that keeps minSdk 23 and carries its own fingerprint
+    // code for API 23-27. Biometric 1.1 used Core's FingerprintManagerCompat, which Core 1.18
+    // made a no-op. 1.4.0-beta01 raises minSdk to 24.
+    implementation 'androidx.biometric:biometric:1.4.0-alpha07'
+    // A minimum, not a pin: host apps may resolve a newer Core.
+    implementation 'androidx.core:core:1.17.0'
     implementation 'androidx.fragment:fragment:1.9.1'
+    // The API 23 fingerprint test runs against the newest Core, which turned Core's own
+    // FingerprintManagerCompat into a no-op. It fails if the biometric library still uses it.
+    testImplementation 'androidx.core:core:1.19.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.17'
 }

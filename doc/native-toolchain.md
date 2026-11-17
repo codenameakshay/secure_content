@@ -1,7 +1,7 @@
 # Native toolchain
 
-Verified against primary release metadata on 2026-10-06. Versions are pinned
-to a supported combination rather than mixed independently.
+The table lists the selected versions and the release metadata reviewed for
+this dependency update. The dated local verification below predates 3.1.1.
 
 | Component | Selected | Current stable | Reason |
 | --- | --- | --- | --- |
@@ -12,9 +12,9 @@ to a supported combination rather than mixed independently.
 | Java host | 25 LTS | 25 LTS | Robolectric SDK 37 requires JDK 21 or newer; Gradle 9.7 supports JDK 25. |
 | Java bytecode | 17 | — | Matching Java/Kotlin targets preserve Android bytecode compatibility. |
 | Android compile SDK | 37 | 37 | AGP 9.3 supports API 37; minimum plugin SDK remains 23. |
-| AndroidX Biometric | 1.1.0 | 1.1.0 | Newer published versions remain alpha releases. |
-| AndroidX AppCompat | 1.8.0 | 1.8.0 | Direct dependency for the legacy fingerprint dialog theme preflight and example themes; compatible with Core 1.17.0. |
-| AndroidX Core | 1.17.0 | 1.19.1 | Latest version retaining the fingerprint implementation needed by stable Biometric 1.1.0 on API 23–27. |
+| AndroidX Biometric | 1.4.0-alpha07 | 1.4.0-beta01 | Newest release with minSdk 23 and its own API 23–27 fingerprint implementation; beta01 raises minSdk to 24. |
+| AndroidX AppCompat | 1.8.0 | 1.8.0 | Direct dependency for the legacy fingerprint dialog theme preflight and example themes. |
+| AndroidX Core | 1.17.0 (minimum) | 1.19.1 | Not pinned, so host apps can resolve a newer Core. Unit tests and the example run against 1.19.1. |
 | AndroidX Fragment | 1.9.1 | 1.9.1 | Declare the directly imported FragmentActivity API rather than inheriting Biometric's old transitive version. |
 | Robolectric | 4.17 | 4.17 | Latest stable JVM Android test runtime. |
 | JUnit | 4.13.2 | 4.13.2 (JUnit 4) | Robolectric's JUnit 4 runner is retained. |
@@ -37,21 +37,30 @@ Consuming Android apps must use compile SDK 37 or newer and AGP 9.2 or newer,
 which supports API 37.0. This does not raise the plugin's Android minimum SDK or change
 the example's Flutter-managed target SDK.
 
+Biometric 1.4.0-alpha07 declares compile SDK 36.1 and AGP 8.9.1 in its AAR
+metadata, both below the existing host requirements. Its dependency metadata
+requests Kotlin stdlib 2.1.20, as Fragment 1.9.1 already did before this update.
+Hosts using the required AGP 9.2 built-in Kotlin support meet that metadata
+requirement. Hosts using older Kotlin compilers can fail metadata checks even
+if they raise compile SDK alone. Do not force an older stdlib to hide the error.
+
 Core 1.18.0 and 1.19.1 retain the `FingerprintManagerCompat` class but replace
 its hardware/enrollment checks with constant `false` and its authentication
-methods with no-ops. This was verified against the official AAR bytecode and
-reproduced by the API 23 biometric test. Core 1.17.0 retains the implementation.
-Its strict dependency constraint prevents another transitive dependency from
-silently disabling API 23–27 authentication while stable Biometric remains 1.1.0.
-To inspect each linked AAR, extract its `classes.jar` and run
-`javap -c -p -classpath classes.jar androidx.core.hardware.fingerprint.FingerprintManagerCompat`.
+methods with no-ops. Biometric 1.1.0 used that class on API 23–27, so 3.0.0 and
+3.1.0 pinned Core to exactly 1.17.0. That pin broke Gradle resolution in any app
+with another plugin that needs a newer Core. Biometric 1.4.0-alpha05 and later
+call the framework `FingerprintManager` through their own
+`androidx.biometric.internal.FingerprintManagerCompat` and reference no Core
+fingerprint class, so Core is now only a minimum. The API 23 Robolectric test
+runs against Core 1.19.1, and the example declares Core 1.19.1 so CI's APK build
+fails if the plugin pins Core again. To check a linked AAR, extract its
+`classes.jar` and search `javap -v` output for `androidx/core/hardware/fingerprint`.
 
 API 23–27 fingerprint dialogs also require an AppCompat theme. The example's
 launch and normal themes inherit `Theme.AppCompat.DayNight.NoActionBar` in
 both light and dark resource sets. The plugin checks the dialog's resolved
 theme before authentication and returns unavailable for unsupported themes.
-AppCompat 1.8.0 declares Core 1.13.0 in its published dependency metadata and
-works with the Core 1.17.0 constraint.
+AppCompat 1.8.0 declares Core 1.13.0 in its published dependency metadata.
 
 CI runs Dart checks, binding regeneration, Android builds, and Android unit tests
 before the iOS job. The iOS job builds the example and compiles runtime tests
@@ -119,6 +128,9 @@ Sources:
 - [Gradle 9.7.0 checksum](https://services.gradle.org/distributions/gradle-9.7.0-bin.zip.sha256)
 - [Gradle Java compatibility](https://docs.gradle.org/9.7.0/userguide/compatibility.html)
 - [Temurin JDK 25 release metadata](https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=aarch64&image_type=jdk&os=linux)
+- [Biometric 1.4.0-alpha07 dependency metadata](https://dl.google.com/dl/android/maven2/androidx/biometric/biometric/1.4.0-alpha07/biometric-1.4.0-alpha07.module)
+- [Biometric 1.4.0-alpha07 AAR](https://dl.google.com/dl/android/maven2/androidx/biometric/biometric/1.4.0-alpha07/biometric-1.4.0-alpha07.aar)
+- [Fragment 1.9.1 dependency metadata](https://dl.google.com/dl/android/maven2/androidx/fragment/fragment/1.9.1/fragment-1.9.1.module)
 - [AndroidX Biometric release metadata](https://dl.google.com/dl/android/maven2/androidx/biometric/biometric/maven-metadata.xml)
 - [AndroidX AppCompat release metadata](https://dl.google.com/dl/android/maven2/androidx/appcompat/appcompat/maven-metadata.xml)
 - [AppCompat 1.8.0 dependency metadata](https://dl.google.com/dl/android/maven2/androidx/appcompat/appcompat/1.8.0/appcompat-1.8.0.module)
