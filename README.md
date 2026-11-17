@@ -66,12 +66,13 @@ iOS builds require a Swift 6 compiler (Xcode 16 or newer).
 Android host apps must compile against SDK 37 or later. The example uses AGP 9.3.3.
 The example and CI use Flutter 3.47.4, which requires iOS 15+. See the
 [native toolchain](doc/native-toolchain.md) for compiler versions and compatibility.
-AndroidX Core is constrained to 1.17.0 because newer releases remove the
-fingerprint implementation required by stable Biometric on Android 23–27.
+The plugin uses AndroidX Biometric 1.4.0-alpha07, which has its own fingerprint
+implementation for Android 23–27. It requires AndroidX Core 1.17.0 or newer and
+does not pin Core, so other plugins can bring a newer version.
 
 ```yaml
 dependencies:
-  secure_content: ^3.1.0
+  secure_content: ^3.1.1
 ```
 
 For Face ID authentication, add a usage description to the host app's

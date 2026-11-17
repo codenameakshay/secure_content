@@ -1318,14 +1318,17 @@ class SecureContentPluginLifecycleTest {
 
     @Test
     @Config(sdk = [35, 36])
-    fun legacyRequestStillReportsUnavailableWhenPreflightReturnsHiddenCodeSeven() {
+    fun legacyRequestOpensThePromptToReportALockoutHiddenAsCodeSeven() {
+        // Biometric 1.4 maps the framework's lockout preflight (7) to BIOMETRIC_SUCCESS, so the
+        // prompt opens and reports the lockout as a failure.
         setFrameworkBiometricPreflightResult(7)
         plugin.onAttachedToActivity(activityBinding(activity()))
 
         plugin.requestBiometricAuth("Legacy unlock")
 
-        assertNull(ShadowBiometricPrompt.getCurrentPrompt())
-        assertEquals(listOf("biometricUnavailable"), messenger.eventTypes)
+        assertNotNull(ShadowBiometricPrompt.getCurrentPrompt())
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT, "Locked")
+        assertEquals(listOf("biometricAuthFailed"), messenger.eventTypes)
         plugin.onDetachedFromEngine(binding)
     }
 

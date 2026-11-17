@@ -1,3 +1,9 @@
+## 3.1.1
+
+- Stop forcing AndroidX Core 1.17.0 on host apps. The strict pin made Gradle fail when another plugin needed a newer Core, for example `Could not resolve androidx.core:core:1.19.1`. Core is now a plain minimum (1.17.0).
+- Update AndroidX Biometric from 1.1.0 to 1.4.0-alpha07. Biometric 1.1 used Core's `FingerprintManagerCompat`, which Core 1.18 and later turned into a no-op, so fingerprint did nothing on Android 7–9 with a newer Core. 1.4.0-alpha07 has its own fingerprint code and keeps minSdk 23. Host apps already need compile SDK 37, which covers its compile SDK 36.1 and AGP 8.9.1 requirements.
+- On Android 15 and later, a locked-out biometric now opens the prompt, which reports the lockout, instead of returning unavailable before the prompt (Biometric 1.4 behavior). `authenticate` reports `temporaryLockout` or `permanentLockout` as before. `requestBiometricAuth` and `SecureContentScope` now get `biometricAuthFailed` instead of `biometricUnavailable` in that case.
+
 ## 3.1.0
 
 - Add `SecureContent.authenticate({required String reason, bool biometricOnly = false})`. It returns a `SecureContentAuthResult` with a `SecureContentAuthStatus`: `success`, `failed`, `canceled`, `timeout`, `temporaryLockout`, `permanentLockout`, `notEnrolled`, `notAvailable`, or `error`. See [Authentication](README.md#authentication).

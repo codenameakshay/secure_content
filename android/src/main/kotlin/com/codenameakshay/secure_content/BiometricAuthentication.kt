@@ -94,9 +94,9 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
             reject(NativeEvent.BIOMETRIC_UNAVAILABLE, AuthStatus.NOT_AVAILABLE, "Requires a FragmentActivity below API 28")
             return
         }
+        // Biometric 1.4 reports a lockout as BIOMETRIC_SUCCESS here; the prompt then reports it.
         val availability = BiometricManager.from(activity).canAuthenticate(authenticators)
-        val lockoutDuringMandatoryBiometrics = isLockoutAvailability(availability)
-        if (availability != BiometricManager.BIOMETRIC_SUCCESS && !(reply != null && lockoutDuringMandatoryBiometrics)) {
+        if (availability != BiometricManager.BIOMETRIC_SUCCESS) {
             reject(NativeEvent.BIOMETRIC_UNAVAILABLE, authStatusForAvailability(availability))
             return
         }
@@ -139,20 +139,15 @@ internal class BiometricAuthentication(private val onEvent: (NativeEvent) -> Uni
     }
 
     fun capability(context: Context): BiometricCapability {
-        val availability = BiometricManager.from(context)
-            .canAuthenticate(allowedAuthenticators(biometricOnly = true, supportsCredentials = false))
-        val available = availability == BiometricManager.BIOMETRIC_SUCCESS ||
-            isLockoutAvailability(availability)
+        val available = BiometricManager.from(context)
+            .canAuthenticate(allowedAuthenticators(biometricOnly = true, supportsCredentials = false)) ==
+            BiometricManager.BIOMETRIC_SUCCESS
         val types = biometryTypes(context.packageManager)
         return BiometricCapability(
             available,
             if (available && types.isEmpty()) listOf(BiometryType.UNKNOWN) else types,
         )
     }
-
-    /** Android 15 QPR and later report the lockout code from `canAuthenticate` for mandatory biometrics. */
-    private fun isLockoutAvailability(availability: Int): Boolean =
-        Build.VERSION.SDK_INT >= 35 && availability == AndroidXBiometricPrompt.ERROR_LOCKOUT
 
     fun onActivityAttached(activity: Activity) {
         val fragmentActivity = activity as? FragmentActivity ?: return
