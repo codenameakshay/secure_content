@@ -803,6 +803,209 @@ class SecureContentPluginLifecycleTest {
     }
 
     @Test
+    fun frameworkGraceRequestRejectsDuplicatesAndDetachInvalidatesItsDelayedReply() {
+        val activity = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        activity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onAttachedToActivity(activityBinding(activity))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        val oldCallback = currentPromptCallback()
+
+        oldCallback.onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED, "Canceled")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS - 1))
+        plugin.authenticate("Duplicate", true) { results.add(it.getOrThrow()) }
+        assertEquals(
+            listOf(AuthResult(AuthStatus.ERROR, "Another authentication is in progress")),
+            results,
+        )
+
+        plugin.onDetachedFromActivityForConfigChanges()
+        assertEquals(
+            listOf(
+                AuthResult(AuthStatus.ERROR, "Another authentication is in progress"),
+                AuthResult(AuthStatus.CANCELED),
+            ),
+            results,
+        )
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "foregroundLifecycle"))
+
+        val nextActivity = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        nextActivity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onReattachedToActivityForConfigChanges(activityBinding(nextActivity))
+        plugin.authenticate("Retry", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+        assertEquals(
+            listOf(
+                AuthResult(AuthStatus.ERROR, "Another authentication is in progress"),
+                AuthResult(AuthStatus.CANCELED),
+            ),
+            results,
+        )
+        currentPromptCallback().onAuthenticationSucceeded(null)
+        assertEquals(
+            listOf(
+                AuthResult(AuthStatus.ERROR, "Another authentication is in progress"),
+                AuthResult(AuthStatus.CANCELED),
+                AuthResult(AuthStatus.SUCCESS),
+            ),
+            results,
+        )
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun androidXGraceRequestEngineDetachRepliesOnceAndCleansObservers() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idle()
+        val oldCallback = currentPromptCallback()
+
+        oldCallback.onAuthenticationError(AndroidXBiometricPrompt.ERROR_USER_CANCELED, "Canceled")
+        shadowOf(Looper.getMainLooper()).idle()
+        plugin.onDetachedFromEngine(binding)
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "foregroundLifecycle"))
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "lifecycleObserver"))
+        assertTrue(messenger.events.isEmpty())
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun androidXDestroyDuringGraceRepliesCanceledAndOldTimerCannotFinishTheNextRequest() {
+        val firstController = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        plugin.onAttachedToActivity(activityBinding(firstController.get()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idle()
+        val oldCallback = currentPromptCallback()
+
+        oldCallback.onAuthenticationError(AndroidXBiometricPrompt.ERROR_USER_CANCELED, "Canceled")
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(results.isEmpty())
+        firstController.pause().stop().destroy()
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "foregroundLifecycle"))
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "lifecycleObserver"))
+
+        val nextController = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        plugin.onReattachedToActivityForConfigChanges(activityBinding(nextController.get()))
+        plugin.authenticate("Retry", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idle()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+        currentPromptCallback().onAuthenticationSucceeded(null)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED), AuthResult(AuthStatus.SUCCESS)), results)
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "foregroundLifecycle"))
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "lifecycleObserver"))
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromEngine(binding)
+        nextController.pause().stop().destroy()
+    }
+
+    @Test
+    fun androidXGraceCancellationSurvivesRecreationAndOldTimerDoesNotReplyAgain() {
+        val firstController = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        val store = firstController.get().viewModelStore
+        plugin.onAttachedToActivity(activityBinding(firstController.get()))
+        val results = mutableListOf<AuthResult>()
+        var nextController: ActivityController<FragmentActivity>? = null
+
+        try {
+            plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+            shadowOf(Looper.getMainLooper()).idle()
+            currentPromptCallback().onAuthenticationError(AndroidXBiometricPrompt.ERROR_USER_CANCELED, "Canceled")
+            shadowOf(Looper.getMainLooper()).idle()
+
+            plugin.onDetachedFromActivityForConfigChanges()
+            assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+            shadowOf(Looper.getMainLooper()).idle()
+            nextController = recreate(firstController)
+            assertSame(store, nextController.get().viewModelStore)
+            plugin.onReattachedToActivityForConfigChanges(activityBinding(nextController.get()))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+            assertEquals(listOf(AuthResult(AuthStatus.CANCELED)), results)
+
+            assertNull(ReflectionHelpers.getField<Any?>(authentication(), "foregroundLifecycle"))
+            assertNull(ReflectionHelpers.getField<Any?>(authentication(), "lifecycleObserver"))
+            plugin.authenticate("Retry", true) { results.add(it.getOrThrow()) }
+            shadowOf(Looper.getMainLooper()).idle()
+            currentPromptCallback().onAuthenticationSucceeded(null)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(listOf(AuthResult(AuthStatus.CANCELED), AuthResult(AuthStatus.SUCCESS)), results)
+            assertTrue(messenger.events.isEmpty())
+        } finally {
+            plugin.onDetachedFromEngine(binding)
+            nextController?.pause()?.stop()?.destroy()
+        }
+    }
+
+    @Test
+    fun pauseFromAReleasedHostCannotMarkTheNextRequestInterrupted() {
+        val frameworkOld = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        val frameworkNext = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        frameworkOld.registry.currentState = Lifecycle.State.RESUMED
+        frameworkNext.registry.currentState = Lifecycle.State.RESUMED
+        assertReleasedHostObserverDoesNotLeak(
+            frameworkOld,
+            frameworkNext,
+            { frameworkOld.registry.currentState = Lifecycle.State.CREATED },
+        )
+
+        val androidXOldController = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        val androidXNext = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        assertReleasedHostObserverDoesNotLeak(
+            androidXOldController.get(),
+            androidXNext,
+            { androidXOldController.pause() },
+        )
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun legacyRequestStillEmitsItsEventImmediatelyWithoutAReplyDuringGrace() {
+        val activity = Robolectric.buildActivity(LifecycleOwnerActivity::class.java).setup().get()
+        activity.registry.currentState = Lifecycle.State.RESUMED
+        plugin.onAttachedToActivity(activityBinding(activity))
+        plugin.requestBiometricAuth("Unlock")
+
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED, "Canceled")
+
+        assertEquals(listOf("biometricAuthFailed"), messenger.eventTypes)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+        assertEquals(listOf("biometricAuthFailed"), messenger.eventTypes)
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "foregroundLifecycle"))
+        plugin.onDetachedFromEngine(binding)
+    }
+
+    @Test
+    fun androidXPauseDuringGraceMarksTheSingleReplyInterrupted() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java).setup()
+        plugin.onAttachedToActivity(activityBinding(controller.get()))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
+        shadowOf(Looper.getMainLooper()).idle()
+
+        currentPromptCallback().onAuthenticationError(AndroidXBiometricPrompt.ERROR_USER_CANCELED, "Canceled")
+        shadowOf(Looper.getMainLooper()).idle()
+        controller.pause()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+
+        assertEquals(listOf(AuthResult(AuthStatus.CANCELED, "Canceled", true)), results)
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "foregroundLifecycle"))
+        assertNull(ReflectionHelpers.getField<Any?>(authentication(), "lifecycleObserver"))
+        plugin.onDetachedFromEngine(binding)
+        controller.stop().destroy()
+    }
+
+    @Test
     fun authenticateWithoutAnActivityRepliesNotAvailable() {
         val results = mutableListOf<AuthResult>()
         plugin.authenticate("Unlock", true) { results.add(it.getOrThrow()) }
@@ -1658,6 +1861,38 @@ class SecureContentPluginLifecycleTest {
         ReflectionHelpers.getField<BiometricAuthentication>(plugin, "biometricAuthentication"),
         "ownershipKey",
     )
+
+    private fun authentication(): BiometricAuthentication =
+        ReflectionHelpers.getField<BiometricAuthentication>(plugin, "biometricAuthentication")
+
+    private fun assertReleasedHostObserverDoesNotLeak(
+        oldActivity: Activity,
+        nextActivity: Activity,
+        pauseOldHost: () -> Unit,
+    ) {
+        plugin.onAttachedToActivity(activityBinding(oldActivity))
+        val results = mutableListOf<AuthResult>()
+        plugin.authenticate("First", true) { results.add(it.getOrThrow()) }
+        if (oldActivity is FragmentActivity) shadowOf(Looper.getMainLooper()).idle()
+        currentPromptCallback().onAuthenticationSucceeded(null)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(listOf(AuthResult(AuthStatus.SUCCESS)), results)
+
+        plugin.onDetachedFromActivity()
+        plugin.onAttachedToActivity(activityBinding(nextActivity))
+        plugin.authenticate("Next", true) { results.add(it.getOrThrow()) }
+        if (nextActivity is FragmentActivity) shadowOf(Looper.getMainLooper()).idle()
+        pauseOldHost()
+        assertFalse((oldActivity as LifecycleOwner).lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        currentPromptCallback().onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED, "Canceled")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(INTERRUPTION_GRACE_MS))
+        assertEquals(
+            listOf(AuthResult(AuthStatus.SUCCESS), AuthResult(AuthStatus.CANCELED, "Canceled")),
+            results,
+        )
+        assertTrue(messenger.events.isEmpty())
+        plugin.onDetachedFromActivity()
+    }
 
     private fun currentPromptCallback(): BiometricPrompt.AuthenticationCallback {
         val session = ReflectionHelpers.getStaticField<Any>(
