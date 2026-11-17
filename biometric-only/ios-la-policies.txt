@@ -1,0 +1,4 @@
+LACBiomeEvaluationEvent caller: com.securecontent.example, policy: 2, errorCode: -9
+LACBiomeEvaluationEvent caller: com.securecontent.example, policy: 2, errorCode: -2
+LACBiomeEvaluationEvent caller: com.securecontent.example, policy: 1, errorCode: -2
+LACBiomeEvaluationEvent caller: com.securecontent.example, policy: 1, errorCode: 0
